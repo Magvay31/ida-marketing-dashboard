@@ -156,12 +156,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   <div class="header-right">
     <button class="btn sm" onclick="refreshAll()" id="refreshBtn">&#8635; Обновить всё</button>
     <button class="btn sm" onclick="refreshGSheet()" id="gsheetBtn">&#128196; Обновить Google Docs</button>
-    <div class="period-selector">
-      <button class="period-btn" onclick="setPeriod('q')">Квартал</button>
-      <button class="period-btn" onclick="setPeriod('h')">Полгода</button>
-      <button class="period-btn" onclick="setPeriod('y')">Год</button>
-      <button class="period-btn active" onclick="setPeriod('all')">Всё время</button>
-    </div>
+    <div class="period-selector" id="monthTabs"></div>
   </div>
 </div>
 
@@ -282,7 +277,7 @@ let amoData = null;
 let metrikaData = null;
 let gsheetData = null;
 let cycleData = null;
-let period = 'all';
+let period = 'all'; // 'all' or specific month key like '2026-02'
 let charts = {};
 let currentProject = 'main';
 const PROJECT_NAMES = {main:'ИдаПроджект',lite:'ИдаЛайт'};
@@ -297,8 +292,13 @@ function getMonths(){
   if(!amoData) return [];
   const all=Object.keys(amoData.monthly).sort();
   if(period==='all') return all;
-  const n=period==='q'?3:period==='h'?6:12;
-  return all.slice(-n);
+  // Single month
+  if(all.includes(period)) return [period];
+  return all;
+}
+function getAllMonths(){
+  if(!amoData) return [];
+  return Object.keys(amoData.monthly).sort();
 }
 
 // Linear regression for forecast
@@ -586,7 +586,7 @@ function getEventAnnotations(months){
 
 function renderDeals(){
   if(!amoData) return;
-  const months=getMonths();
+  const months=getAllMonths();
   const labels=months.map(ml);
   const leads=months.map(m=>amoData.monthly[m]?.leads||0);
   const won=months.map(m=>amoData.monthly[m]?.won||0);
@@ -621,7 +621,7 @@ function renderDeals(){
 }
 
 function renderEfficiency(){
-  const months=getMonths();
+  const months=getAllMonths();
   if(!months.length) return;
   const labels=months.map(ml);
   const gs=gsheetData?.monthly_totals||{};
@@ -757,7 +757,7 @@ function renderReasons(){
 
 function renderConvCycle(){
   if(!amoData) return;
-  const months=getMonths();
+  const months=getAllMonths();
   const labels=months.map(ml);
   const conv=months.map(m=>{const d=amoData.monthly[m];return d&&d.leads>0?+(d.won/d.leads*100).toFixed(1):0});
 
@@ -1124,6 +1124,7 @@ function renderMonthlyTable(){
 }
 
 function renderAll(){
+  renderMonthTabs();
   renderExecSummary();
   renderKPIs();
   renderDeals();
@@ -1162,11 +1163,21 @@ async function setProject(p){
 
 function setPeriod(p){
   period=p;
-  document.querySelectorAll('.header-right .period-btn').forEach(b=>{
-    const map={q:'Квартал',h:'Полгода',y:'Год',all:'Всё время'};
-    b.classList.toggle('active',b.textContent.trim()===map[p]);
+  document.querySelectorAll('#monthTabs .period-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.period===p);
   });
   renderAll();
+}
+
+function renderMonthTabs(){
+  if(!amoData) return;
+  const all=Object.keys(amoData.monthly).sort();
+  let html='<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod(\'all\')">Все</button>';
+  html=`<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod('all')">Все</button>`;
+  all.forEach(mk=>{
+    html+=`<button class="period-btn ${period===mk?'active':''}" data-period="${mk}" onclick="setPeriod('${mk}')">${ml(mk)}</button>`;
+  });
+  document.getElementById('monthTabs').innerHTML=html;
 }
 
 async function refreshAll(){
