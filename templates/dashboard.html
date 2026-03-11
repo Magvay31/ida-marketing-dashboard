@@ -1124,20 +1124,20 @@ function renderMonthlyTable(){
 }
 
 function renderAll(){
-  renderMonthTabs();
-  renderExecSummary();
-  renderKPIs();
-  renderDeals();
-  renderEfficiency();
-  renderTraffic();
-  renderFunnel();
-  renderReasons();
-  renderConvCycle();
-  renderSourcesTable();
-  renderBudgetChart();
-  renderEvents();
-  renderRecommendations();
-  renderMonthlyTable();
+  try{ renderMonthTabs() }catch(e){console.error('renderMonthTabs:',e)}
+  try{ renderExecSummary() }catch(e){console.error('renderExecSummary:',e)}
+  try{ renderKPIs() }catch(e){console.error('renderKPIs:',e)}
+  try{ renderDeals() }catch(e){console.error('renderDeals:',e)}
+  try{ renderEfficiency() }catch(e){console.error('renderEfficiency:',e)}
+  try{ renderTraffic() }catch(e){console.error('renderTraffic:',e)}
+  try{ renderFunnel() }catch(e){console.error('renderFunnel:',e)}
+  try{ renderReasons() }catch(e){console.error('renderReasons:',e)}
+  try{ renderConvCycle() }catch(e){console.error('renderConvCycle:',e)}
+  try{ renderSourcesTable() }catch(e){console.error('renderSourcesTable:',e)}
+  try{ renderBudgetChart() }catch(e){console.error('renderBudgetChart:',e)}
+  try{ renderEvents() }catch(e){console.error('renderEvents:',e)}
+  try{ renderRecommendations() }catch(e){console.error('renderRecommendations:',e)}
+  try{ renderMonthlyTable() }catch(e){console.error('renderMonthlyTable:',e)}
 }
 
 async function setProject(p){
