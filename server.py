@@ -103,14 +103,23 @@ def _set_nested(cfg, dotpath, value):
     val[parts[-1]] = value
 
 def load_config():
+    # Try env var first (for Railway/cloud), then file
+    env_cfg = os.environ.get('CONFIG_JSON')
+    if env_cfg:
+        return json.loads(env_cfg)
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as f:
             return json.load(f)
     return {}
 
 def save_config(cfg):
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(cfg, f, indent=2, ensure_ascii=False)
+    # In cloud env, save to env-based config is not persistent
+    # but still save to file if possible
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+    except OSError:
+        pass  # Read-only filesystem in cloud
 
 def get_project(req=None):
     """Get project key from request args, default 'main'"""
