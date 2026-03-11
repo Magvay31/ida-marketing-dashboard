@@ -511,31 +511,43 @@ function renderExecSummary(){
 function renderKPIs(){
   if(!amoData) return;
   const months=getMonths();
-  const d=months.map(m=>amoData.monthly[m]).filter(Boolean);
-  const tL=sum(d.map(x=>x.leads));
-  const tW=sum(d.map(x=>x.won));
-  const tWB=sum(d.map(x=>x.won_budget));
-  const conv=tL>0?(tW/tL*100).toFixed(1):'0';
+  const lastM=months[months.length-1];
+  const prevM=months.length>1?months[months.length-2]:null;
+  const cur=amoData.monthly[lastM]||{};
+  const prev=prevM?amoData.monthly[prevM]:null;
   const active=amoData.totals.active;
-
   const gs=gsheetData?.monthly_totals||{};
-  const totalSpendFact=sum(months.map(m=>gs[m]?.fact||0));
-  const totalSpendPlan=sum(months.map(m=>gs[m]?.plan||0));
-  const roas=totalSpendFact>0?(tWB/totalSpendFact).toFixed(1):'—';
-  const cpl=tL>0&&totalSpendFact>0?Math.round(totalSpendFact/tL):0;
-  const cac=tW>0&&totalSpendFact>0?Math.round(totalSpendFact/tW):0;
+  const curSpend=gs[lastM]?.fact||0;
+  const prevSpend=prev?(gs[prevM]?.fact||0):0;
+  const curPlan=gs[lastM]?.plan||0;
 
-  // Forecast next month leads
+  const conv=cur.leads>0?(cur.won/cur.leads*100).toFixed(1):'0';
+  const cpl=cur.leads>0&&curSpend>0?Math.round(curSpend/cur.leads):0;
+  const roas=curSpend>0&&cur.won_budget>0?(cur.won_budget/curSpend).toFixed(1):'—';
+
+  // Trend arrows
+  function trend(curV,prevV){
+    if(!prev||!prevV) return '';
+    const diff=curV-prevV;
+    const pct=prevV>0?Math.round(Math.abs(diff)/prevV*100):0;
+    if(diff===0) return '<span class="kpi-change" style="color:var(--muted)">= 0%</span>';
+    return diff>0
+      ?`<span class="kpi-change up">+${pct}%</span>`
+      :`<span class="kpi-change down">-${pct}%</span>`;
+  }
+
+  // Forecast
   const leadsArr=months.map(m=>amoData.monthly[m]?.leads||0);
   const fc=forecast(leadsArr,1);
 
+  const monthLabel=ml(lastM);
   const kpis=[
-    {label:'Входящие лиды',value:tL,sub:`прогноз: ~${fc[0]} след. мес`,color:''},
-    {label:'Выигранные сделки',value:tW,sub:`конверсия ${conv}%`,color:tW>0?'var(--green)':''},
-    {label:'Выручка (выигр.)',value:fR(tWB)+'₽',sub:`ср. чек ${tW>0?fR(Math.round(tWB/tW)):'0'}₽`,color:'var(--green)'},
-    {label:'Расход маркетинг',value:fR(totalSpendFact)+'₽',sub:`план: ${fR(totalSpendPlan)}₽`,color:''},
-    {label:'CPL (стоимость лида)',value:cpl>0?fR(cpl)+'₽':'—',sub:cac>0?`CAC: ${fR(cac)}₽`:'нет данных',color:cpl>0?'var(--orange)':''},
-    {label:'ROAS',value:roas+'x',sub:roas!=='—'&&parseFloat(roas)>=1?'маркетинг окупается':'маркетинг не окупается',color:roas!=='—'&&parseFloat(roas)>=1?'var(--green)':'var(--red)'},
+    {label:`Лиды (${monthLabel})`,value:cur.leads||0,sub:`прогноз: ~${fc[0]} след. мес ${trend(cur.leads,prev?.leads)}`},
+    {label:`Выигранные (${monthLabel})`,value:cur.won||0,sub:`конверсия ${conv}% ${trend(cur.won,prev?.won)}`,color:cur.won>0?'var(--green)':''},
+    {label:`Выручка (${monthLabel})`,value:fR(cur.won_budget||0)+'₽',sub:`ср. чек ${cur.won>0?fR(Math.round(cur.won_budget/cur.won)):'—'}₽ ${trend(cur.won_budget,prev?.won_budget)}`,color:'var(--green)'},
+    {label:`Расход (${monthLabel})`,value:fR(curSpend)+'₽',sub:`план: ${fR(curPlan)}₽ ${trend(curSpend,prevSpend)}`,color:''},
+    {label:'CPL',value:cpl>0?fR(cpl)+'₽':'—',sub:'стоимость 1 лида',color:cpl>0?'var(--orange)':''},
+    {label:'В работе сейчас',value:active,sub:`pipeline ${fR(amoData.totals.total_budget)}₽`,color:'var(--accent)'},
   ];
   document.getElementById('kpiGrid').innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value" ${k.color?`style="color:${k.color}"`:''} >${k.value}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
 }

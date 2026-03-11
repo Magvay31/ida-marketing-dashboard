@@ -171,18 +171,41 @@ def amo_api(endpoint, params=None, project='main'):
 
 def fetch_all_amo_leads(project='main'):
     all_leads = []
+    seen_ids = set()
+    date_from = int(datetime(2026, 1, 1).timestamp())
+
+    # 1) Leads created in 2026
     page = 1
-    created_from = int(datetime(2026, 1, 1).timestamp())
     while True:
         data = amo_api('leads', {
             'limit': 250, 'page': page, 'with': 'loss_reason',
-            'filter[created_at][from]': created_from,
+            'filter[created_at][from]': date_from,
         }, project=project)
         leads = data.get('_embedded', {}).get('leads', [])
-        all_leads.extend(leads)
+        for l in leads:
+            if l['id'] not in seen_ids:
+                all_leads.append(l)
+                seen_ids.add(l['id'])
         if not leads or 'next' not in data.get('_links', {}):
             break
         page += 1
+
+    # 2) Leads closed in 2026 (may have been created earlier)
+    page = 1
+    while True:
+        data = amo_api('leads', {
+            'limit': 250, 'page': page, 'with': 'loss_reason',
+            'filter[closed_at][from]': date_from,
+        }, project=project)
+        leads = data.get('_embedded', {}).get('leads', [])
+        for l in leads:
+            if l['id'] not in seen_ids:
+                all_leads.append(l)
+                seen_ids.add(l['id'])
+        if not leads or 'next' not in data.get('_links', {}):
+            break
+        page += 1
+
     return all_leads
 
 def fetch_loss_reasons(project='main'):
@@ -228,18 +251,20 @@ def analyze_amo_data(leads, project='main'):
     for lead in leads:
         created = datetime.fromtimestamp(lead['created_at'])
         mk = created.strftime('%Y-%m')
-        m = monthly[mk]
-        m['leads'] += 1
+        is_2026 = mk >= '2026-01'
         price = lead.get('price', 0) or 0
-        m['total_budget'] += price
         status_id = lead['status_id']
 
-        if price > 0:
-            m['has_price'] += 1
-
-        companies = lead.get('_embedded', {}).get('companies', [])
-        if companies:
-            m['has_company'] += 1
+        # Count lead in its creation month (only 2026+)
+        if is_2026:
+            m = monthly[mk]
+            m['leads'] += 1
+            m['total_budget'] += price
+            if price > 0:
+                m['has_price'] += 1
+            companies = lead.get('_embedded', {}).get('companies', [])
+            if companies:
+                m['has_company'] += 1
 
         source = None
         cf = lead.get('custom_fields_values') or []
@@ -253,10 +278,12 @@ def analyze_amo_data(leads, project='main'):
                 continue
             if field_lead_source and fid == field_lead_source:
                 source = val
-                m['has_source'] += 1
-                m['by_source'][val] += 1
+                if is_2026:
+                    m['has_source'] += 1
+                    m['by_source'][val] += 1
             elif field_comment and fid == field_comment:
-                m['has_comment'] += 1
+                if is_2026:
+                    m['has_comment'] += 1
 
         won_statuses = proj.get('won_statuses', set())
         lost_statuses = proj.get('lost_statuses', set())
@@ -264,20 +291,30 @@ def analyze_amo_data(leads, project='main'):
         is_lost = status_id == 143 or status_id in lost_statuses
 
         if is_won:
-            m['won'] += 1
-            m['won_budget'] += price
+            # Use closed_at month for won deals (they may have been created much earlier)
+            closed_mk = mk
+            if lead.get('closed_at'):
+                closed_mk = datetime.fromtimestamp(lead['closed_at']).strftime('%Y-%m')
+            wm = monthly[closed_mk]
+            wm['won'] += 1
+            wm['won_budget'] += price
             if source:
                 source_totals[source]['won'] += 1
                 source_totals[source]['budget'] += price
         elif is_lost:
-            m['lost'] += 1
-            m['lost_total'] += 1
+            # Use closed_at month for lost deals too
+            closed_mk = mk
+            if lead.get('closed_at'):
+                closed_mk = datetime.fromtimestamp(lead['closed_at']).strftime('%Y-%m')
+            lm = monthly[closed_mk]
+            lm['lost'] += 1
+            lm['lost_total'] += 1
             loss_id = lead.get('loss_reason_id')
             if loss_id:
                 reason = loss_reasons_map.get(loss_id, f'Причина {loss_id}')
-                m['loss_reasons'][reason] += 1
+                lm['loss_reasons'][reason] += 1
                 loss_totals[reason] += 1
-                m['has_loss_reason'] += 1
+                lm['has_loss_reason'] += 1
         else:  # Active
             stage = status_names.get(status_id, f'Статус {status_id}')
             active_funnel[stage] += 1
@@ -285,7 +322,9 @@ def analyze_amo_data(leads, project='main'):
         if source:
             source_totals[source]['leads'] += 1
 
-    months_sorted = sorted(monthly.keys())
+    # Only show 2026+ months with actual activity
+    months_sorted = sorted(k for k in monthly.keys()
+                           if k >= '2026-01' and (monthly[k]['leads'] > 0 or monthly[k]['won'] > 0 or monthly[k]['lost'] > 0))
     result = {
         'monthly': {},
         'loss_reasons': sorted(loss_totals.items(), key=lambda x: -x[1]),
@@ -293,12 +332,12 @@ def analyze_amo_data(leads, project='main'):
         'active_funnel': sorted(active_funnel.items(),
             key=lambda x: list(status_names.values()).index(x[0]) if x[0] in status_names.values() else 99),
         'totals': {
-            'leads': sum(m['leads'] for m in monthly.values()),
-            'won': sum(m['won'] for m in monthly.values()),
-            'lost': sum(m['lost'] for m in monthly.values()),
+            'leads': sum(monthly[k]['leads'] for k in months_sorted),
+            'won': sum(monthly[k]['won'] for k in months_sorted),
+            'lost': sum(monthly[k]['lost'] for k in months_sorted),
             'active': sum(active_funnel.values()),
-            'total_budget': sum(m['total_budget'] for m in monthly.values()),
-            'won_budget': sum(m['won_budget'] for m in monthly.values()),
+            'total_budget': sum(monthly[k]['total_budget'] for k in months_sorted),
+            'won_budget': sum(monthly[k]['won_budget'] for k in months_sorted),
         }
     }
 
