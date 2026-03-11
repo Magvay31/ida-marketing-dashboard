@@ -1,0 +1,11 @@
+config.json
+lite_tokens.json
+*.log
+*.csv
+*.json
+!package.json
+!requirements.txt
+__pycache__/
+.omc/
+venv/
+.env
