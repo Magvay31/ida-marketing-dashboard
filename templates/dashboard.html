@@ -277,7 +277,7 @@ let amoData = null;
 let metrikaData = null;
 let gsheetData = null;
 let cycleData = null;
-let period = 'all'; // 'all' or specific month key like '2026-02'
+let period = 'latest'; // 'all', 'latest', or specific month key like '2026-02'
 let charts = {};
 let currentProject = 'main';
 const PROJECT_NAMES = {main:'ИдаПроджект',lite:'ИдаЛайт'};
@@ -293,9 +293,9 @@ function getMonths(){
   if(!amoData) return [];
   const all=Object.keys(amoData.monthly).sort();
   if(period==='all') return all;
-  // Single month
+  if(period==='latest') return all.length?[all[all.length-1]]:[];
   if(all.includes(period)) return [period];
-  return all;
+  return all.length?[all[all.length-1]]:[];
 }
 function getAllMonths(){
   if(!amoData) return [];
@@ -512,6 +512,7 @@ function renderExecSummary(){
 function renderKPIs(){
   if(!amoData) return;
   const months=getMonths();
+  if(!months.length) return;
   const lastM=months[months.length-1];
   const prevM=months.length>1?months[months.length-2]:null;
   const cur=amoData.monthly[lastM]||{};
@@ -1173,9 +1174,12 @@ function setPeriod(p){
 function renderMonthTabs(){
   if(!amoData) return;
   const all=Object.keys(amoData.monthly).sort();
+  const lastMk=all[all.length-1];
+  const isLatest=period==='latest'||(!all.includes(period)&&period!=='all');
   let html=`<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod('all')">Все</button>`;
   all.forEach(mk=>{
-    html+=`<button class="period-btn ${period===mk?'active':''}" data-period="${mk}" onclick="setPeriod('${mk}')">${ml(mk)}</button>`;
+    const active=(period===mk)||(isLatest&&mk===lastMk);
+    html+=`<button class="period-btn ${active?'active':''}" data-period="${mk}" onclick="setPeriod('${mk}')">${ml(mk)}</button>`;
   });
   document.getElementById('monthTabs').innerHTML=html;
 }
