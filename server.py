@@ -179,16 +179,19 @@ def amo_api(endpoint, params=None, project='main'):
     return resp.json()
 
 def fetch_all_amo_leads(project='main'):
+    proj = PROJECTS.get(project, PROJECTS['main'])
+    pipeline_id = proj['pipeline_id']
     all_leads = []
     seen_ids = set()
     date_from = int(datetime(2026, 1, 1).timestamp())
 
-    # 1) Leads created in 2026
+    # 1) Leads created in 2026 (filtered by pipeline)
     page = 1
     while True:
         data = amo_api('leads', {
             'limit': 250, 'page': page, 'with': 'loss_reason',
             'filter[created_at][from]': date_from,
+            'filter[pipeline_id]': pipeline_id,
         }, project=project)
         leads = data.get('_embedded', {}).get('leads', [])
         for l in leads:
@@ -199,12 +202,13 @@ def fetch_all_amo_leads(project='main'):
             break
         page += 1
 
-    # 2) Leads closed in 2026 (may have been created earlier)
+    # 2) Leads closed in 2026 (may have been created earlier, filtered by pipeline)
     page = 1
     while True:
         data = amo_api('leads', {
             'limit': 250, 'page': page, 'with': 'loss_reason',
             'filter[closed_at][from]': date_from,
+            'filter[pipeline_id]': pipeline_id,
         }, project=project)
         leads = data.get('_embedded', {}).get('leads', [])
         for l in leads:
@@ -673,4 +677,4 @@ if __name__ == '__main__':
         save_config({})
     print("Dashboard server starting at http://localhost:5050")
     print("   Open http://localhost:5050 in your browser")
-    app.run(host='0.0.0.0', port=5050, debug=True)
+    app.run(host='0.0.0.0', port=5050, debug=True, threaded=True)
