@@ -17,6 +17,28 @@ from flask import Flask, render_template, jsonify, request
 app = Flask(__name__)
 
 # ============================================================
+# CACHE (in-memory, per project+endpoint, TTL 3 hours)
+# ============================================================
+CACHE = {}  # key: (project, endpoint) -> {'data': ..., 'ts': timestamp}
+CACHE_TTL = 3 * 3600  # 3 hours in seconds
+
+def cache_get(project, endpoint):
+    """Return cached data if fresh, else None."""
+    key = (project, endpoint)
+    entry = CACHE.get(key)
+    if entry and (time.time() - entry['ts']) < CACHE_TTL:
+        return entry['data'], entry['ts']
+    return None, None
+
+def cache_set(project, endpoint, data):
+    """Store data in cache."""
+    CACHE[(project, endpoint)] = {'data': data, 'ts': time.time()}
+
+def is_refresh():
+    """Check if client requested forced refresh."""
+    return request.args.get('refresh') == '1'
+
+# ============================================================
 # CONFIG
 # ============================================================
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), 'config.json')
@@ -516,6 +538,10 @@ def index():
 @app.route('/api/amo/cycle')
 def api_amo_cycle():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'cycle')
+        if cached:
+            return jsonify({'ok': True, 'data': cached, 'cached': True})
     proj = PROJECTS.get(project, PROJECTS['main'])
     try:
         cache_name = proj.get('cache_file')
@@ -568,23 +594,30 @@ def api_amo_cycle():
             s = sorted(vals)
             m_stats[mk] = {'avg': round(sum(vals)/len(vals)), 'median': s[len(s)//2], 'count': len(vals)}
 
-        return jsonify({'ok': True, 'data': {
+        result = {
             'avg': round(sum(cycles)/len(cycles)),
             'median': median,
             'count': len(cycles),
             'quarterly': q_stats,
             'monthly': m_stats,
-        }})
+        }
+        cache_set(project, 'cycle', result)
+        return jsonify({'ok': True, 'data': result, 'cached': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/api/amo/data')
 def api_amo_data():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'amo')
+        if cached:
+            return jsonify({'ok': True, 'data': cached, 'fetched_at': datetime.fromtimestamp(ts).isoformat(), 'cached': True})
     try:
         leads = fetch_all_amo_leads(project)
         result = analyze_amo_data(leads, project)
-        return jsonify({'ok': True, 'data': result, 'fetched_at': datetime.now().isoformat()})
+        cache_set(project, 'amo', result)
+        return jsonify({'ok': True, 'data': result, 'fetched_at': datetime.now().isoformat(), 'cached': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
@@ -600,6 +633,10 @@ def api_metrika_auth():
 @app.route('/api/metrika/traffic')
 def api_metrika_traffic():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'metrika_traffic')
+        if cached:
+            return jsonify(cached)
     date_from = request.args.get('from', '2026-01-01')
     date_to = request.args.get('to', datetime.now().strftime('%Y-%m-%d'))
     data = metrika_api('stat/v1/data/bytime', {
@@ -608,11 +645,16 @@ def api_metrika_traffic():
         'date2': date_to,
         'group': 'month',
     }, project=project)
+    cache_set(project, 'metrika_traffic', data)
     return jsonify(data)
 
 @app.route('/api/metrika/sources')
 def api_metrika_sources():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'metrika_sources')
+        if cached:
+            return jsonify(cached)
     date_from = request.args.get('from', '2026-01-01')
     date_to = request.args.get('to', datetime.now().strftime('%Y-%m-%d'))
     data = metrika_api('stat/v1/data/bytime', {
@@ -622,11 +664,16 @@ def api_metrika_sources():
         'date2': date_to,
         'group': 'month',
     }, project=project)
+    cache_set(project, 'metrika_sources', data)
     return jsonify(data)
 
 @app.route('/api/metrika/organic')
 def api_metrika_organic():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'metrika_organic')
+        if cached:
+            return jsonify(cached)
     date_from = request.args.get('from', '2026-01-01')
     date_to = request.args.get('to', datetime.now().strftime('%Y-%m-%d'))
     data = metrika_api('stat/v1/data/bytime', {
@@ -636,11 +683,16 @@ def api_metrika_organic():
         'group': 'month',
         'filters': "ym:s:trafficSource=='organic'",
     }, project=project)
+    cache_set(project, 'metrika_organic', data)
     return jsonify(data)
 
 @app.route('/api/metrika/summary')
 def api_metrika_summary():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'metrika_summary')
+        if cached:
+            return jsonify(cached)
     date_from = request.args.get('from', '2026-01-01')
     date_to = request.args.get('to', datetime.now().strftime('%Y-%m-%d'))
     data = metrika_api('stat/v1/data', {
@@ -649,14 +701,20 @@ def api_metrika_summary():
         'date1': date_from,
         'date2': date_to,
     }, project=project)
+    cache_set(project, 'metrika_summary', data)
     return jsonify(data)
 
 @app.route('/api/gsheet/data')
 def api_gsheet_data():
     project = get_project()
+    if not is_refresh():
+        cached, ts = cache_get(project, 'gsheet')
+        if cached:
+            return jsonify({'ok': True, 'data': cached, 'cached': True})
     try:
         data = fetch_google_sheet(project)
-        return jsonify({'ok': True, 'data': data})
+        cache_set(project, 'gsheet', data)
+        return jsonify({'ok': True, 'data': data, 'cached': False})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

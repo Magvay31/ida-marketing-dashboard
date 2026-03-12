@@ -281,7 +281,8 @@ let period = 'all'; // 'all' or specific month key like '2026-02'
 let charts = {};
 let currentProject = 'main';
 const PROJECT_NAMES = {main:'ИдаПроджект',lite:'ИдаЛайт'};
-function qp(){return '?project='+currentProject}
+let forceRefresh = false;
+function qp(){return '?project='+currentProject+(forceRefresh?'&refresh=1':'')}
 
 const MN = {'01':'Янв','02':'Фев','03':'Мар','04':'Апр','05':'Май','06':'Июн','07':'Июл','08':'Авг','09':'Сен','10':'Окт','11':'Ноя','12':'Дек'};
 function ml(k){const[y,m]=k.split('-');return MN[m]+"'"+y.slice(2)}
@@ -335,7 +336,7 @@ async function fetchAmo(){
   try{
     const r=await fetch('/api/amo/data'+qp());
     const j=await r.json();
-    if(j.ok){amoData=j.data;document.getElementById('updatedAt').textContent='Обновлено: '+new Date(j.fetched_at).toLocaleString('ru-RU')}
+    if(j.ok){amoData=j.data;document.getElementById('updatedAt').textContent='Обновлено: '+new Date(j.fetched_at).toLocaleString('ru-RU')+(j.cached?' (кэш)':' (свежие данные)')}
     else throw new Error(j.error);
   }catch(e){console.error('AMO error:',e)}
   document.getElementById('refreshBtn').innerHTML='&#8635; Обновить всё';
@@ -1180,17 +1181,21 @@ function renderMonthTabs(){
 }
 
 async function refreshAll(){
+  forceRefresh=true;
   await Promise.all([fetchAmo(),fetchMetrika(),fetchGSheet(),fetchCycle()]);
+  forceRefresh=false;
   renderAll();
 }
 
 async function refreshGSheet(){
+  forceRefresh=true;
   await fetchGSheet();
+  forceRefresh=false;
   renderEvents();
 }
 
 // ============================================================
-// INIT
+// INIT + AUTO-REFRESH every 3 hours
 // ============================================================
 async function init(){
   const status=await fetchStatus();
@@ -1199,6 +1204,13 @@ async function init(){
   const newStatus=await fetchStatus();
   renderConnBar(newStatus);
   renderAll();
+  // Auto-refresh every 3 hours
+  setInterval(async()=>{
+    forceRefresh=true;
+    await Promise.all([fetchAmo(),fetchMetrika(),fetchGSheet(),fetchCycle()]);
+    forceRefresh=false;
+    renderAll();
+  }, 3*60*60*1000);
 }
 init();
 </script>
