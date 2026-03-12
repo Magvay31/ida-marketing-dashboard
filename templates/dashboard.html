@@ -1172,8 +1172,7 @@ function setPeriod(p){
 function renderMonthTabs(){
   if(!amoData) return;
   const all=Object.keys(amoData.monthly).sort();
-  let html='<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod(\'all\')">Все</button>';
-  html=`<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod('all')">Все</button>`;
+  let html=`<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod('all')">Все</button>`;
   all.forEach(mk=>{
     html+=`<button class="period-btn ${period===mk?'active':''}" data-period="${mk}" onclick="setPeriod('${mk}')">${ml(mk)}</button>`;
   });
