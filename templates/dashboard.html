@@ -1592,7 +1592,7 @@ function buildErzDetail(r){
             const sc=statusColor[d.s]||(d.s?'var(--accent)':'var(--muted)');
             const price=d.p&&d.p>0?fR(d.p)+' ₽':'—';
             return `<tr style="border-bottom:1px solid rgba(139,143,163,.1)">
-              <td style="padding:4px 6px">${d.n||'—'}</td>
+              <td style="padding:4px 6px">${d.id?`<a href="https://89775828332.amocrm.ru/leads/detail/${d.id}" target="_blank" style="color:var(--accent);text-decoration:none;border-bottom:1px dashed var(--accent)">${d.n||'—'}</a>`:d.n||'—'}</td>
               <td style="padding:4px 6px"><span style="color:${sc};font-weight:600">${d.s||'—'}</span></td>
               <td style="padding:4px 6px;text-align:right">${price}</td>
               <td style="padding:4px 6px;text-align:center;color:var(--muted)">${erzFmtDate(d.d)||'—'}</td>
@@ -1623,7 +1623,7 @@ function buildErzDetail(r){
           const sc=statusColor[d.s]||(d.s?'var(--accent2)':'var(--muted)');
           const price=d.p&&d.p>0?fR(d.p)+' ₽':'—';
           return `<tr style="border-bottom:1px solid rgba(139,143,163,.1)">
-            <td style="padding:4px 6px">${d.n||'—'}</td>
+            <td style="padding:4px 6px">${d.id?`<a href="https://teamidaliteru.amocrm.ru/leads/detail/${d.id}" target="_blank" style="color:var(--accent2);text-decoration:none;border-bottom:1px dashed var(--accent2)">${d.n||'—'}</a>`:d.n||'—'}</td>
             <td style="padding:4px 6px"><span style="color:${sc};font-weight:600">${d.s||'—'}</span></td>
             <td style="padding:4px 6px;text-align:right">${price}</td>
             <td style="padding:4px 6px;text-align:center;color:var(--muted)">${erzFmtDate(d.d)||'—'}</td>
