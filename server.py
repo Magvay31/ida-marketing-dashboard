@@ -735,23 +735,27 @@ def api_gsheet_data():
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
-def fetch_amo_leads_for_year(year, project='main'):
-    """Fetch all leads created in a given year for the project's main pipeline."""
+def fetch_amo_leads_by_filter(project='main', created_from=None, created_to=None, closed_from=None, closed_to=None):
+    """Fetch leads with flexible filters (created_at and/or closed_at)."""
     proj = PROJECTS.get(project, PROJECTS['main'])
     pipeline_id = proj['pipeline_id']
     all_leads = []
     seen_ids = set()
-    date_from = int(datetime(year, 1, 1).timestamp())
-    date_to = int(datetime(year, 12, 31, 23, 59, 59).timestamp())
+
+    params = {'limit': 250, 'with': 'loss_reason', 'filter[pipeline_id]': pipeline_id}
+    if created_from:
+        params['filter[created_at][from]'] = created_from
+    if created_to:
+        params['filter[created_at][to]'] = created_to
+    if closed_from:
+        params['filter[closed_at][from]'] = closed_from
+    if closed_to:
+        params['filter[closed_at][to]'] = closed_to
 
     page = 1
     while True:
-        data = amo_api('leads', {
-            'limit': 250, 'page': page, 'with': 'loss_reason',
-            'filter[created_at][from]': date_from,
-            'filter[created_at][to]': date_to,
-            'filter[pipeline_id]': pipeline_id,
-        }, project=project)
+        params['page'] = page
+        data = amo_api('leads', params, project=project)
         leads = data.get('_embedded', {}).get('leads', [])
         for l in leads:
             if l['id'] not in seen_ids:
@@ -762,6 +766,13 @@ def fetch_amo_leads_for_year(year, project='main'):
         page += 1
 
     return all_leads
+
+
+def fetch_amo_leads_for_year(year, project='main'):
+    """Fetch all leads created in a given year for the project's main pipeline."""
+    date_from = int(datetime(year, 1, 1).timestamp())
+    date_to = int(datetime(year, 12, 31, 23, 59, 59).timestamp())
+    return fetch_amo_leads_by_filter(project, created_from=date_from, created_to=date_to)
 
 
 @app.route('/api/amo/yoy')
@@ -775,8 +786,17 @@ def api_amo_yoy():
         proj = PROJECTS.get(project, PROJECTS['main'])
         won_statuses = proj.get('won_statuses', set()) | {142}
 
+        # Leads CREATED in each year
         leads_2025 = fetch_amo_leads_for_year(2025, project)
         leads_2026 = fetch_amo_leads_for_year(2026, project)
+
+        # Won deals CLOSED in each year (regardless of creation date)
+        won_closed_2025 = fetch_amo_leads_by_filter(project,
+            closed_from=int(datetime(2025, 1, 1).timestamp()),
+            closed_to=int(datetime(2025, 12, 31, 23, 59, 59).timestamp()))
+        won_closed_2026 = fetch_amo_leads_by_filter(project,
+            closed_from=int(datetime(2026, 1, 1).timestamp()),
+            closed_to=int(datetime(2026, 12, 31, 23, 59, 59).timestamp()))
 
         months = {f'{m:02d}': {
             'leads_2025': 0, 'leads_2026': 0,
@@ -784,25 +804,26 @@ def api_amo_yoy():
             'budget_2025': 0, 'budget_2026': 0,
         } for m in range(1, 13)}
 
+        # Count leads by creation month
         for lead in leads_2025:
-            created = datetime.fromtimestamp(lead['created_at'])
-            mk = f'{created.month:02d}'
+            mk = f'{datetime.fromtimestamp(lead["created_at"]).month:02d}'
             months[mk]['leads_2025'] += 1
-            if lead.get('status_id') in won_statuses:
-                closed_ts = lead.get('closed_at') or lead['created_at']
-                closed = datetime.fromtimestamp(closed_ts)
+        for lead in leads_2026:
+            mk = f'{datetime.fromtimestamp(lead["created_at"]).month:02d}'
+            months[mk]['leads_2026'] += 1
+
+        # Count won deals by closed month (separate fetch = correct totals)
+        for lead in won_closed_2025:
+            if lead.get('status_id') in won_statuses and lead.get('closed_at'):
+                closed = datetime.fromtimestamp(lead['closed_at'])
                 if closed.year == 2025:
                     wmk = f'{closed.month:02d}'
                     months[wmk]['won_2025'] += 1
                     months[wmk]['budget_2025'] += (lead.get('price', 0) or 0)
 
-        for lead in leads_2026:
-            created = datetime.fromtimestamp(lead['created_at'])
-            mk = f'{created.month:02d}'
-            months[mk]['leads_2026'] += 1
-            if lead.get('status_id') in won_statuses:
-                closed_ts = lead.get('closed_at') or lead['created_at']
-                closed = datetime.fromtimestamp(closed_ts)
+        for lead in won_closed_2026:
+            if lead.get('status_id') in won_statuses and lead.get('closed_at'):
+                closed = datetime.fromtimestamp(lead['closed_at'])
                 if closed.year == 2026:
                     wmk = f'{closed.month:02d}'
                     months[wmk]['won_2026'] += 1
@@ -956,24 +977,40 @@ def api_amo_funnel():
             'deal_to_won': round(won_count / deal_count * 100, 1) if deal_count > 0 else 0,
         }
 
-        # Loss reasons from existing data
+        # Loss reasons with deal details for drill-down
         loss_reasons_map = proj['loss_reasons']
         if not loss_reasons_map:
             loss_reasons_map = fetch_loss_reasons(project)
             proj['loss_reasons'] = loss_reasons_map
         loss_reasons_agg = defaultdict(int)
+        loss_reasons_details = defaultdict(list)
+        field_comment = proj.get('field_comment')
         for lead in leads:
             if lead.get('status_id') in lost_statuses:
                 rid = lead.get('loss_reason_id')
-                if rid:
-                    reason = loss_reasons_map.get(rid, f'Причина {rid}')
-                    loss_reasons_agg[reason] += 1
+                reason = loss_reasons_map.get(rid, 'Без причины') if rid else 'Без причины'
+                loss_reasons_agg[reason] += 1
+                # Collect deal details for drill-down
+                comment = ''
+                cf = lead.get('custom_fields_values') or []
+                for f in cf:
+                    if field_comment and f['field_id'] == field_comment:
+                        comment = f.get('values', [{}])[0].get('value', '')[:200]
+                created = datetime.fromtimestamp(lead['created_at']).strftime('%Y-%m-%d')
+                price = lead.get('price', 0) or 0
+                loss_reasons_details[reason].append({
+                    'name': lead.get('name', '')[:60],
+                    'price': price,
+                    'created': created,
+                    'comment': comment,
+                })
 
         result = {
             'stages': stages_result,
             'key_conversions': key_conversions,
             'loss_by_stage': dict(loss_by_stage),
             'loss_reasons': sorted(loss_reasons_agg.items(), key=lambda x: -x[1]),
+            'loss_details': {k: sorted(v, key=lambda x: -x['price']) for k, v in loss_reasons_details.items()},
         }
         cache_set(project, 'funnel', result)
         return jsonify({'ok': True, 'data': result, 'cached': False})
