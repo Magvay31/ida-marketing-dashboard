@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marketing Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.1.0/dist/chartjs-plugin-annotation.min.js"></script>
+<style>
+:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2e3d;--text:#e4e6ef;--muted:#8b8fa3;--accent:#6366f1;--accent2:#22d3ee;--green:#22c55e;--red:#ef4444;--orange:#f59e0b;--pink:#ec4899}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+
+.header{padding:16px 28px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#14161f,var(--bg))}
+.header h1{font-size:20px;font-weight:700;letter-spacing:-.5px}
+.header h1 span{color:var(--accent)}
+.header-right{display:flex;align-items:center;gap:10px}
+
+.status-dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.status-dot.ok{background:var(--green);animation:pulse 2s infinite}
+.status-dot.err{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.btn{padding:7px 14px;border-radius:7px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:12px;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:5px}
+.btn:hover{border-color:var(--accent);background:#222633}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.sm{padding:5px 10px;font-size:11px}
+
+.period-selector{display:flex;background:var(--card);border-radius:8px;border:1px solid var(--border);overflow:hidden}
+.period-btn{padding:7px 14px;border:none;background:transparent;color:var(--muted);font-size:12px;cursor:pointer;transition:all .2s}
+.period-btn.active{background:var(--accent);color:#fff}
+.period-btn:hover:not(.active){color:var(--text)}
+
+.main{padding:20px 28px}
+
+.conn-bar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.conn-chip{padding:5px 12px;border-radius:6px;font-size:11px;font-weight:600;display:flex;align-items:center;gap:5px}
+.conn-chip.ok{background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.2)}
+.conn-chip.err{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+.conn-chip.warn{background:rgba(245,158,11,.1);color:var(--orange);border:1px solid rgba(245,158,11,.2)}
+
+.kpi-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;transition:transform .15s,border-color .15s}
+.kpi-card:hover{transform:translateY(-2px);border-color:var(--accent)}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px}
+.kpi-value{font-size:24px;font-weight:700;letter-spacing:-1px;line-height:1.1}
+.kpi-sub{font-size:11px;color:var(--muted);margin-top:3px}
+.kpi-change{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;margin-top:4px;padding:2px 6px;border-radius:4px}
+.kpi-change.up{color:var(--green);background:rgba(34,197,94,.1)}
+.kpi-change.down{color:var(--red);background:rgba(239,68,68,.1)}
+
+.charts-row{display:grid;gap:12px;margin-bottom:12px}
+.charts-row.c2{grid-template-columns:1fr 1fr}
+.charts-row.c3{grid-template-columns:1fr 1fr 1fr}
+.charts-row.c23{grid-template-columns:2fr 1fr}
+.charts-row.c32{grid-template-columns:1fr 2fr}
+
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px;position:relative}
+.chart-card h3{font-size:13px;font-weight:600;margin-bottom:2px}
+.chart-card .sub{font-size:10px;color:var(--muted);margin-bottom:12px}
+.chart-card .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(15,17,23,.8);border-radius:10px;font-size:13px;color:var(--muted)}
+
+.funnel-stage{display:flex;align-items:center;margin-bottom:5px}
+.funnel-label{width:170px;font-size:11px;color:var(--muted);text-align:right;flex-shrink:0;padding-right:10px}
+.funnel-bar-wrap{flex:1}
+.funnel-bar{height:30px;border-radius:5px;display:flex;align-items:center;padding-left:10px;font-weight:700;font-size:12px;transition:width .5s}
+.funnel-pct{width:45px;font-size:11px;font-weight:600;flex-shrink:0;padding-left:6px}
+
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{text-align:left;font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:7px 5px;border-bottom:1px solid var(--border)}
+.data-table td{padding:8px 5px;font-size:11px;border-bottom:1px solid rgba(42,46,61,.4)}
+.data-table tr:hover td{background:rgba(99,102,241,.04)}
+.bar-mini{height:4px;border-radius:2px;background:var(--border);overflow:hidden;margin-top:2px}
+.bar-mini-fill{height:100%;border-radius:2px;transition:width .4s}
+
+.quality-bar{display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.quality-label{font-size:10px;color:var(--muted);width:100px;text-align:right}
+.quality-track{flex:1;height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.quality-fill{height:100%;border-radius:4px;transition:width .4s}
+.quality-pct{font-size:10px;font-weight:600;width:35px}
+
+.event-list{max-height:300px;overflow-y:auto}
+.event-cat{font-size:9px;padding:2px 5px;border-radius:3px;font-weight:600;white-space:nowrap;height:fit-content}
+.event-cat.ext{background:rgba(99,102,241,.15);color:var(--accent)}
+.event-cat.cont{background:rgba(34,197,94,.15);color:var(--green)}
+.event-cat.rate{background:rgba(245,158,11,.15);color:var(--orange)}
+.event-cat.other{background:rgba(139,143,163,.15);color:var(--muted)}
+.event-cat.int{background:rgba(236,72,153,.15);color:var(--pink)}
+
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+
+.forecast-line{border-top:2px dashed rgba(99,102,241,.3)}
+
+.metrika-setup{background:var(--card);border:1px solid var(--orange);border-radius:10px;padding:16px;margin-bottom:16px}
+.metrika-setup h4{color:var(--orange);font-size:13px;margin-bottom:8px}
+.metrika-setup p{font-size:12px;color:var(--muted);margin-bottom:10px}
+.metrika-setup input{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:12px;width:300px;margin-right:8px}
+
+.tab-row{display:flex;gap:4px;margin-bottom:10px}
+.tab-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:10px;cursor:pointer;transition:all .2s}
+.tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+.updated-at{font-size:10px;color:var(--muted);text-align:right;margin-top:8px}
+
+/* Executive Summary */
+.exec-summary{background:linear-gradient(135deg,rgba(99,102,241,.06),rgba(34,211,238,.06));border:1px solid var(--border);border-radius:12px;padding:20px 24px;margin-bottom:16px}
+.exec-summary h2{font-size:15px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.exec-summary .verdict{font-size:13px;font-weight:700;padding:6px 14px;border-radius:8px;display:inline-block;margin-bottom:12px}
+.exec-summary .verdict.good{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.25)}
+.exec-summary .verdict.warn{background:rgba(245,158,11,.12);color:var(--orange);border:1px solid rgba(245,158,11,.25)}
+.exec-summary .verdict.bad{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25)}
+.exec-items{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.exec-item{font-size:12px;line-height:1.6;padding:8px 12px;border-radius:8px;border-left:3px solid}
+.exec-item.good{background:rgba(34,197,94,.04);border-color:var(--green)}
+.exec-item.bad{background:rgba(239,68,68,.04);border-color:var(--red)}
+.exec-item.warn{background:rgba(245,158,11,.04);border-color:var(--orange)}
+.exec-item.action{background:rgba(99,102,241,.04);border-color:var(--accent)}
+.exec-item b{color:var(--text)}
+.exec-item .label{font-size:9px;text-transform:uppercase;letter-spacing:.5px;font-weight:700;margin-bottom:2px}
+.exec-item .label.green{color:var(--green)}
+.exec-item .label.red{color:var(--red)}
+.exec-item .label.orange{color:var(--orange)}
+.exec-item .label.blue{color:var(--accent)}
+
+/* Recommendations */
+.rec-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:18px}
+.rec-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(42,46,61,.3);font-size:12px;line-height:1.5}
+.rec-item:last-child{border-bottom:none}
+.rec-priority{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0}
+.rec-priority.high{background:rgba(239,68,68,.15);color:var(--red)}
+.rec-priority.med{background:rgba(245,158,11,.15);color:var(--orange)}
+.rec-priority.low{background:rgba(34,197,94,.15);color:var(--green)}
+.rec-text b{color:var(--text)}
+.rec-text{color:var(--muted)}
+.rec-impact{font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;white-space:nowrap;margin-top:4px;display:inline-block}
+.rec-impact.money{background:rgba(34,197,94,.1);color:var(--green)}
+.rec-impact.growth{background:rgba(99,102,241,.1);color:var(--accent)}
+.rec-impact.risk{background:rgba(239,68,68,.1);color:var(--red)}
+
+@media(max-width:1200px){
+  .kpi-grid{grid-template-columns:repeat(3,1fr)}
+  .charts-row.c2,.charts-row.c3,.charts-row.c23,.charts-row.c32{grid-template-columns:1fr}
+  .exec-items{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="header">
+  <div style="display:flex;align-items:center;gap:16px">
+    <h1 id="headerTitle"><span>ида</span>Проджект — Marketing Dashboard</h1>
+    <div class="period-selector" id="projectTabs">
+      <button class="period-btn active" onclick="setProject('main')">ИдаПроджект</button>
+      <button class="period-btn" onclick="setProject('lite')">ИдаЛайт</button>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="btn sm" onclick="refreshAll()" id="refreshBtn">&#8635; Обновить всё</button>
+    <button class="btn sm" onclick="refreshGSheet()" id="gsheetBtn">&#128196; Обновить Google Docs</button>
+    <div class="period-selector" id="monthTabs"></div>
+  </div>
+</div>
+
+<div class="main">
+  <!-- Connection status -->
+  <div class="conn-bar" id="connBar"></div>
+
+  <!-- Metrika setup (hidden when connected) -->
+  <div class="metrika-setup" id="metrikaSetup" style="display:none">
+    <h4>&#9888; Яндекс Метрика — нужна авторизация</h4>
+    <p>1. Перейдите по ссылке ниже и авторизуйтесь<br>
+       2. Скопируйте код со страницы и вставьте сюда</p>
+    <a id="metrikaAuthLink" href="#" target="_blank" class="btn sm primary" style="margin-bottom:10px;display:inline-block">Авторизовать Метрику</a><br>
+    <input type="text" id="metrikaCode" placeholder="Вставьте код авторизации...">
+    <button class="btn sm primary" onclick="submitMetrikaCode()">Подключить</button>
+  </div>
+
+  <!-- EXECUTIVE SUMMARY -->
+  <div class="exec-summary" id="execSummary">
+    <h2>Загрузка аналитики...</h2>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <!-- Row 1: Leads dynamics + Marketing Efficiency -->
+  <div class="charts-row c2">
+    <div class="chart-card">
+      <h3>Динамика лидов и сделок</h3>
+      <div class="sub" id="dealsChartSub">AmoCRM — лиды, выигрыши, прогноз + маркетинговые события</div>
+      <canvas id="dealsChart"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Эффективность маркетинга</h3>
+      <div class="sub">Расход (факт) vs Лиды vs CPL — помесячно</div>
+      <canvas id="efficiencyChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 1b: YoY comparison -->
+  <div class="charts-row c2">
+    <div class="chart-card">
+      <h3>Сделки Year-over-Year</h3>
+      <div class="sub">Сравнение 2025 vs 2026 по месяцам</div>
+      <canvas id="yoyChart"></canvas>
+      <div id="yoyDelta" style="margin-top:10px"></div>
+    </div>
+    <div class="chart-card">
+      <h3>YoY — выигранные сделки и бюджет</h3>
+      <div class="sub">Сравнение выигранных сделок и бюджета 2025 vs 2026</div>
+      <div id="yoyTable"></div>
+    </div>
+  </div>
+
+  <!-- Row 1c: Funnel Conversion Analysis -->
+  <div class="charts-row c2">
+    <div class="chart-card">
+      <h3>Воронка конверсий</h3>
+      <div class="sub">AmoCRM — путь лида от первого контакта до сделки</div>
+      <div id="funnelConvContainer"></div>
+      <div id="funnelKeyConv" style="margin-top:14px"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Потери по этапам воронки</h3>
+      <div class="sub">Где и сколько сделок теряем</div>
+      <div id="funnelLossContainer"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: Traffic + Funnel -->
+  <div class="charts-row c2">
+    <div class="chart-card">
+      <h3>Трафик сайта</h3>
+      <div class="sub">Яндекс Метрика — визиты + органика + события</div>
+      <canvas id="trafficChart"></canvas>
+      <div id="trafficNoData" style="display:none;text-align:center;padding:40px;color:var(--muted);font-size:12px">Подключите Яндекс Метрику для отображения данных</div>
+    </div>
+    <div class="chart-card">
+      <h3>Воронка продаж (активные сделки)</h3>
+      <div class="sub">AmoCRM — сделки в работе прямо сейчас</div>
+      <div id="funnelContainer"></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Loss Reasons + Conversion -->
+  <div class="charts-row c2">
+    <div class="chart-card">
+      <h3>Причины отказов — где теряем деньги</h3>
+      <div class="sub">AmoCRM — анализ потерь с рекомендациями</div>
+      <div id="reasonsContainer"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Конверсия и цикл сделки</h3>
+      <div class="sub">% выигранных + средний цикл по месяцам</div>
+      <canvas id="convCycleChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 4: Sources effectiveness table + Budget plan vs fact -->
+  <div class="charts-row c2">
+    <div class="chart-card">
+      <h3>Источники лидов — эффективность</h3>
+      <div class="sub">AmoCRM — откуда приходят, кто конвертируется</div>
+      <div id="sourcesTable"></div>
+    </div>
+    <div class="chart-card">
+      <h3>Бюджет: план vs факт</h3>
+      <div class="sub">Google Docs — контроль расходования</div>
+      <canvas id="budgetChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Row 5: Activities table full width -->
+  <div class="charts-row" style="margin-bottom:12px">
+    <div class="chart-card">
+      <h3>Маркетинговые активности — ROI</h3>
+      <div class="sub">Google Docs — план мероприятий, расходы и результат</div>
+      <button class="btn sm" onclick="refreshGSheet()" style="position:absolute;right:16px;top:14px">&#8635;</button>
+      <div style="max-height:500px;overflow-y:auto" id="eventsList"></div>
+    </div>
+  </div>
+
+  <!-- Row 6: Recommendations -->
+  <div class="charts-row" style="margin-bottom:12px">
+    <div class="rec-card">
+      <h3 style="margin-bottom:12px">&#127919; Рекомендации — что делать дальше</h3>
+      <div id="recsContainer"></div>
+    </div>
+  </div>
+
+  <!-- Row 7: Summary table -->
+  <div class="charts-row" style="margin-bottom:12px">
+    <div class="chart-card">
+      <h3>Сводная таблица по месяцам</h3>
+      <div class="sub">Все ключевые метрики + юнит-экономика</div>
+      <div style="overflow-x:auto" id="monthlyTableContainer"></div>
+    </div>
+  </div>
+
+  <div class="updated-at" id="updatedAt"></div>
+</div>
+
+<script>
+// ============================================================
+// STATE
+// ============================================================
+let amoData = null;
+let metrikaData = null;
+let gsheetData = null;
+let cycleData = null;
+let yoyData = null;
+let funnelData = null;
+let period = 'latest'; // 'all', 'latest', or specific month key like '2026-02'
+let charts = {};
+let currentProject = 'main';
+const PROJECT_NAMES = {main:'ИдаПроджект',lite:'ИдаЛайт'};
+let forceRefresh = false;
+function qp(){return '?project='+currentProject+(forceRefresh?'&refresh=1':'')}
+
+const MN = {'01':'Янв','02':'Фев','03':'Мар','04':'Апр','05':'Май','06':'Июн','07':'Июл','08':'Авг','09':'Сен','10':'Окт','11':'Ноя','12':'Дек'};
+function ml(k){const[y,m]=k.split('-');return MN[m]+"'"+y.slice(2)}
+function fR(n){if(n>=1e9)return(n/1e6).toFixed(0)+' млн';if(n>=1e6)return(n/1e6).toFixed(1)+' млн';if(n>=1e3)return(n/1e3).toFixed(0)+' тыс';return n+''}
+function sum(a){return a.reduce((s,v)=>s+v,0)}
+
+function getMonths(){
+  if(!amoData) return [];
+  const all=Object.keys(amoData.monthly).sort();
+  if(period==='all') return all;
+  if(period==='latest') return all.length?[all[all.length-1]]:[];
+  if(all.includes(period)) return [period];
+  return all.length?[all[all.length-1]]:[];
+}
+function getAllMonths(){
+  if(!amoData) return [];
+  return Object.keys(amoData.monthly).sort();
+}
+
+// Linear regression for forecast
+function linReg(values){
+  const n=values.length;
+  if(n<3) return {slope:0,intercept:values[n-1]||0};
+  let sx=0,sy=0,sxy=0,sxx=0;
+  for(let i=0;i<n;i++){sx+=i;sy+=values[i];sxy+=i*values[i];sxx+=i*i}
+  const slope=(n*sxy-sx*sy)/(n*sxx-sx*sx);
+  const intercept=(sy-slope*sx)/n;
+  return {slope,intercept};
+}
+
+function forecast(values,steps){
+  const{slope,intercept}=linReg(values);
+  const result=[];
+  for(let i=0;i<steps;i++){
+    const v=Math.max(0,Math.round(intercept+slope*(values.length+i)));
+    result.push(v);
+  }
+  return result;
+}
+
+// ============================================================
+// API CALLS
+// ============================================================
+async function fetchStatus(){
+  const r=await fetch('/api/status'+qp());
+  return r.json();
+}
+
+async function fetchAmo(){
+  document.getElementById('refreshBtn').textContent='⟳ Загрузка...';
+  try{
+    const r=await fetch('/api/amo/data'+qp());
+    const j=await r.json();
+    if(j.ok){amoData=j.data;document.getElementById('updatedAt').textContent='Обновлено: '+new Date(j.fetched_at).toLocaleString('ru-RU')+(j.cached?' (кэш)':' (свежие данные)')}
+    else throw new Error(j.error);
+  }catch(e){console.error('AMO error:',e)}
+  document.getElementById('refreshBtn').innerHTML='&#8635; Обновить всё';
+}
+
+async function fetchMetrika(){
+  try{
+    const[traffic,sources,summary,organic]=await Promise.all([
+      fetch('/api/metrika/traffic'+qp()).then(r=>r.json()),
+      fetch('/api/metrika/sources'+qp()).then(r=>r.json()),
+      fetch('/api/metrika/summary'+qp()).then(r=>r.json()),
+      fetch('/api/metrika/organic'+qp()).then(r=>r.json()),
+    ]);
+    if(traffic.error){metrikaData=null;return traffic}
+    metrikaData={traffic,sources,summary,organic};
+    return null;
+  }catch(e){console.error('Metrika error:',e);return{error:e.message}}
+}
+
+async function fetchCycle(){
+  try{
+    const r=await fetch('/api/amo/cycle'+qp());
+    const j=await r.json();
+    if(j.ok) cycleData=j.data;
+  }catch(e){console.error('Cycle error:',e)}
+}
+
+async function fetchGSheet(){
+  document.getElementById('gsheetBtn').textContent='⟳ Загрузка...';
+  try{
+    const r=await fetch('/api/gsheet/data'+qp());
+    const j=await r.json();
+    if(j.ok) gsheetData=j.data;
+  }catch(e){console.error('GSheet error:',e)}
+  document.getElementById('gsheetBtn').innerHTML='&#128196; Обновить Google Docs';
+}
+
+async function fetchYoY(){
+  try{
+    const r=await fetch('/api/amo/yoy'+qp());
+    const j=await r.json();
+    if(j.ok) yoyData=j.data;
+  }catch(e){console.error('YoY error:',e)}
+}
+
+async function fetchFunnel(){
+  try{
+    const r=await fetch('/api/amo/funnel'+qp());
+    const j=await r.json();
+    if(j.ok) funnelData=j.data;
+  }catch(e){console.error('Funnel error:',e)}
+}
+
+async function submitMetrikaCode(){
+  const code=document.getElementById('metrikaCode').value.trim();
+  if(!code) return;
+  const r=await fetch('/api/metrika/auth'+qp()+'&code='+encodeURIComponent(code));
+  const j=await r.json();
+  if(j.ok){document.getElementById('metrikaSetup').style.display='none';await fetchMetrika();renderAll()}
+  else alert('Ошибка авторизации. Попробуйте получить новый код.');
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+Chart.defaults.color='#8b8fa3';
+Chart.defaults.borderColor='rgba(42,46,61,0.5)';
+Chart.defaults.font.family="-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif";
+Chart.defaults.font.size=10;
+Chart.defaults.plugins.legend.labels.boxWidth=8;
+Chart.defaults.plugins.legend.labels.padding=12;
+Chart.defaults.elements.point.radius=2.5;
+Chart.defaults.elements.point.hoverRadius=4;
+Chart.defaults.elements.line.tension=0.35;
+
+function renderConnBar(status){
+  let html='';
+  html+=`<div class="conn-chip ${status.amo_connected?'ok':'err'}"><span class="status-dot ${status.amo_connected?'ok':'err'}"></span>AmoCRM ${status.amo_connected?'подключена':'ошибка'}</div>`;
+  html+=`<div class="conn-chip ${status.metrika_connected?'ok':'warn'}"><span class="status-dot ${status.metrika_connected?'ok':'err'}"></span>Яндекс Метрика ${status.metrika_connected?'подключена':'не подключена'}</div>`;
+  html+=`<div class="conn-chip ok"><span class="status-dot ok"></span>Google Docs</div>`;
+  document.getElementById('connBar').innerHTML=html;
+  if(!status.metrika_connected&&status.metrika_auth_url){
+    document.getElementById('metrikaSetup').style.display='block';
+    document.getElementById('metrikaAuthLink').href=status.metrika_auth_url;
+  } else {
+    document.getElementById('metrikaSetup').style.display='none';
+  }
+}
+
+// ============================================================
+// EXECUTIVE SUMMARY — the brain of the dashboard
+// ============================================================
+function renderExecSummary(){
+  if(!amoData) return;
+  const months=getMonths();
+  const d=months.map(m=>amoData.monthly[m]).filter(Boolean);
+  const gs=gsheetData?.monthly_totals||{};
+
+  const tL=sum(d.map(x=>x.leads));
+  const tW=sum(d.map(x=>x.won));
+  const tLost=sum(d.map(x=>x.lost));
+  const tWB=sum(d.map(x=>x.won_budget));
+  const totalSpend=sum(months.map(m=>gs[m]?.fact||0));
+  const conv=tL>0?(tW/tL*100):0;
+  const active=amoData.totals.active;
+  const cpl=tL>0&&totalSpend>0?Math.round(totalSpend/tL):0;
+  const cac=tW>0&&totalSpend>0?Math.round(totalSpend/tW):0;
+  const roas=totalSpend>0?(tWB/totalSpend):0;
+
+  // Month-over-month trends
+  const lastM=months[months.length-1];
+  const prevM=months.length>1?months[months.length-2]:null;
+  const lastD=amoData.monthly[lastM];
+  const prevD=prevM?amoData.monthly[prevM]:null;
+  const leadsTrend=prevD&&prevD.leads>0?((lastD.leads-prevD.leads)/prevD.leads*100):0;
+
+  // Top loss reason
+  const topLoss=amoData.loss_reasons[0];
+  const lossTotal=amoData.loss_reasons.reduce((a,r)=>a+r[1],0);
+  const topLossPct=lossTotal>0&&topLoss?Math.round(topLoss[1]/lossTotal*100):0;
+
+  // Pipeline value
+  const pipelineValue=amoData.totals.total_budget||0;
+
+  // Forecast
+  const leadsArr=months.map(m=>amoData.monthly[m]?.leads||0);
+  const fcLeads=forecast(leadsArr,1)[0];
+
+  // Budget efficiency
+  const spendPlan=sum(months.map(m=>gs[m]?.plan||0));
+  const budgetExec=spendPlan>0?Math.round(totalSpend/spendPlan*100):0;
+
+  // Traffic
+  let trafficTrend='';
+  if(metrikaData&&metrikaData.traffic&&metrikaData.traffic.data&&metrikaData.traffic.data[0]){
+    const v=metrikaData.traffic.data[0].metrics[0];
+    if(v.length>=2){
+      const tChange=v[v.length-2]>0?((v[v.length-1]-v[v.length-2])/v[v.length-2]*100).toFixed(0):0;
+      trafficTrend=tChange;
+    }
+  }
+
+  // Determine overall verdict
+  let verdictClass='warn',verdictText='Требует внимания';
+  if(conv>=10&&roas>=3&&leadsTrend>0){verdictClass='good';verdictText='Маркетинг работает хорошо'}
+  else if(conv<3||roas<1||(tW===0&&tL>20)){verdictClass='bad';verdictText='Маркетинг требует пересмотра'}
+
+  // Build items
+  let items=[];
+
+  // GOOD things
+  if(active>10) items.push({type:'good',label:'Работает',text:`<b>${active} сделок в работе</b> — воронка наполнена. Потенциал закрытия: <b>${fR(pipelineValue)}₽</b>`});
+  if(tW>0) items.push({type:'good',label:'Работает',text:`Выиграно <b>${tW} ${tW===1?'сделка':tW<5?'сделки':'сделок'}</b> на <b>${fR(tWB)}₽</b>${roas>1?`. ROAS = <b>${roas.toFixed(1)}x</b> — каждый рубль в маркетинг приносит ${roas.toFixed(1)}₽ выручки`:''}`});
+  if(conv>=5) items.push({type:'good',label:'Работает',text:`Конверсия <b>${conv.toFixed(1)}%</b> — ${conv>=10?'отличный':'хороший'} показатель для B2B`});
+
+  // BAD things
+  if(conv<5&&tL>10) items.push({type:'bad',label:'Проблема',text:`Конверсия <b>${conv.toFixed(1)}%</b> — слишком низкая${topLoss?`. Главная причина потерь: <b>«${topLoss[0]}» (${topLossPct}%)</b>`:''}`});
+  if(topLoss&&topLossPct>30) items.push({type:'bad',label:'Потери',text:`<b>${topLossPct}% отказов</b> по причине «${topLoss[0]}» — ${topLoss[0].includes('целевой')||topLoss[0].includes('Дубль')?'проблема с качеством трафика, нужно пересмотреть каналы привлечения':'нужно разобраться и устранить'}`});
+  if(leadsTrend<-20&&months.length>1) items.push({type:'bad',label:'Тревога',text:`Лиды упали на <b>${Math.abs(leadsTrend).toFixed(0)}%</b> (${prevD?.leads}→${lastD?.leads}). ${lastM.endsWith('03')&&lastD.leads<prevD?.leads?'Возможно, месяц ещё не закончен':'Нужно усилить активности'}`});
+  if(roas<1&&totalSpend>0) items.push({type:'bad',label:'Убыток',text:`ROAS <b>${roas.toFixed(1)}x</b> — маркетинг пока не окупается. Потрачено <b>${fR(totalSpend)}₽</b>, выиграно <b>${fR(tWB)}₽</b>`});
+
+  // WARNINGS
+  if(cpl>0) items.push({type:'warn',label:'Юнит-экономика',text:`CPL (стоимость лида) = <b>${fR(cpl)}₽</b>${cac>0?`, CAC (стоимость клиента) = <b>${fR(cac)}₽</b>`:''}.${cac>0&&tWB>0&&tW>0?` Средний чек <b>${fR(Math.round(tWB/tW))}₽</b> — ${Math.round(tWB/tW)>cac*3?'юнит-экономика сходится':'нужно растить средний чек или снижать CAC'}`:''}`});
+  if(budgetExec>0&&budgetExec<70) items.push({type:'warn',label:'Бюджет',text:`Освоение бюджета <b>${budgetExec}%</b> — деньги не тратятся. План <b>${fR(spendPlan)}₽</b>, факт <b>${fR(totalSpend)}₽</b>`});
+  if(budgetExec>120) items.push({type:'warn',label:'Перерасход',text:`Бюджет превышен — <b>${budgetExec}%</b> от плана. План <b>${fR(spendPlan)}₽</b>, факт <b>${fR(totalSpend)}₽</b>`});
+
+  // ACTION items
+  items.push({type:'action',label:'Прогноз',text:`Ожидаемый поток: <b>~${fcLeads} лидов</b> в следующем месяце (линейный прогноз)${trafficTrend?`. Трафик ${trafficTrend>0?'растёт':'падает'} на <b>${Math.abs(trafficTrend)}%</b>`:''}`});
+
+  // Ensure at least 4 items
+  if(items.length<4){
+    const srcFilled=amoData.lead_sources.reduce((a,s)=>a+s[1].leads,0);
+    const srcPct=tL>0?Math.round(srcFilled/tL*100):0;
+    if(srcPct<50) items.push({type:'warn',label:'Данные',text:`Поле «Лид пришёл» заполнено у <b>${srcPct}%</b> сделок — без этого невозможно понять эффективность каналов`});
+  }
+
+  let html=`<h2>&#9889; Аналитика ${PROJECT_NAMES[currentProject]}</h2>`;
+  html+=`<div class="verdict ${verdictClass}">${verdictText}</div>`;
+  html+='<div class="exec-items">';
+  items.slice(0,6).forEach(item=>{
+    const labelClass=item.type==='good'?'green':item.type==='bad'?'red':item.type==='warn'?'orange':'blue';
+    const labelText=item.label;
+    html+=`<div class="exec-item ${item.type}"><div><div class="label ${labelClass}">${labelText}</div>${item.text}</div></div>`;
+  });
+  html+='</div>';
+  document.getElementById('execSummary').innerHTML=html;
+}
+
+function renderKPIs(){
+  if(!amoData) return;
+  const months=getMonths();
+  if(!months.length) return;
+  const lastM=months[months.length-1];
+  const prevM=months.length>1?months[months.length-2]:null;
+  const cur=amoData.monthly[lastM]||{};
+  const prev=prevM?amoData.monthly[prevM]:null;
+  const active=amoData.totals.active;
+  const gs=gsheetData?.monthly_totals||{};
+  const curSpend=gs[lastM]?.fact||0;
+  const prevSpend=prev?(gs[prevM]?.fact||0):0;
+  const curPlan=gs[lastM]?.plan||0;
+
+  const conv=cur.leads>0?(cur.won/cur.leads*100).toFixed(1):'0';
+  const cpl=cur.leads>0&&curSpend>0?Math.round(curSpend/cur.leads):0;
+  const roas=curSpend>0&&cur.won_budget>0?(cur.won_budget/curSpend).toFixed(1):'—';
+
+  // Trend arrows
+  function trend(curV,prevV){
+    if(!prev||!prevV) return '';
+    const diff=curV-prevV;
+    const pct=prevV>0?Math.round(Math.abs(diff)/prevV*100):0;
+    if(diff===0) return '<span class="kpi-change" style="color:var(--muted)">= 0%</span>';
+    return diff>0
+      ?`<span class="kpi-change up">+${pct}%</span>`
+      :`<span class="kpi-change down">-${pct}%</span>`;
+  }
+
+  // Forecast
+  const leadsArr=months.map(m=>amoData.monthly[m]?.leads||0);
+  const fc=forecast(leadsArr,1);
+
+  const monthLabel=ml(lastM);
+  const kpis=[
+    {label:`Лиды (${monthLabel})`,value:cur.leads||0,sub:`прогноз: ~${fc[0]} след. мес ${trend(cur.leads,prev?.leads)}`},
+    {label:`Выигранные (${monthLabel})`,value:cur.won||0,sub:`конверсия ${conv}% ${trend(cur.won,prev?.won)}`,color:cur.won>0?'var(--green)':''},
+    {label:`Выручка (${monthLabel})`,value:fR(cur.won_budget||0)+'₽',sub:`ср. чек ${cur.won>0?fR(Math.round(cur.won_budget/cur.won)):'—'}₽ ${trend(cur.won_budget,prev?.won_budget)}`,color:'var(--green)'},
+    {label:`Расход (${monthLabel})`,value:fR(curSpend)+'₽',sub:`план: ${fR(curPlan)}₽ ${trend(curSpend,prevSpend)}`,color:''},
+    {label:'CPL',value:cpl>0?fR(cpl)+'₽':'—',sub:'стоимость 1 лида',color:cpl>0?'var(--orange)':''},
+    {label:'В работе сейчас',value:active,sub:`pipeline ${fR(amoData.totals.total_budget)}₽`,color:'var(--accent)'},
+  ];
+  document.getElementById('kpiGrid').innerHTML=kpis.map(k=>`<div class="kpi-card"><div class="kpi-label">${k.label}</div><div class="kpi-value" ${k.color?`style="color:${k.color}"`:''} >${k.value}</div><div class="kpi-sub">${k.sub}</div></div>`).join('');
+}
+
+// Build event annotations for charts
+function getEventAnnotations(months){
+  if(!gsheetData||!gsheetData.activities) return {};
+  const evByMonth={};
+  const catMap={'Мероприятия внешние':'ext','Мероприятия внутренние':'int','Контент':'cont','Конетнт':'cont','Рейтинги и конкурсы':'rate'};
+  const catColors={ext:'#ec4899',int:'#a78bfa',cont:'#22c55e',rate:'#f59e0b',other:'#8b8fa3'};
+  gsheetData.activities.forEach(e=>{
+    if(!e.activity&&!e.what) return;
+    const cat=Object.entries(catMap).find(([k])=>e.block.includes(k));
+    const catKey=cat?cat[1]:'other';
+    if(catKey==='other') return;
+    if(!evByMonth[e.month]) evByMonth[e.month]=[];
+    evByMonth[e.month].push({name:e.activity||e.what,cat:catKey,color:catColors[catKey]});
+  });
+  const annotations={};
+  months.forEach((mk,i)=>{
+    const evs=evByMonth[mk];
+    if(!evs||evs.length===0) return;
+    const names=evs.slice(0,3).map(e=>e.name).join(', ');
+    const shortName=names.length>40?names.slice(0,37)+'...':names;
+    annotations['ev_'+i]={
+      type:'line',xMin:i,xMax:i,
+      borderColor:evs[0].color||'#ec4899',borderWidth:1.5,borderDash:[3,3],
+      label:{display:true,content:'* '+shortName,position:'start',
+        font:{size:8,weight:'bold'},color:evs[0].color||'#ec4899',
+        backgroundColor:'rgba(15,17,23,0.85)',padding:{x:4,y:2},
+        rotation:-90,yAdjust:-10}
+    };
+  });
+  return annotations;
+}
+
+function renderDeals(){
+  if(!amoData) return;
+  const months=getAllMonths();
+  const labels=months.map(ml);
+  const leads=months.map(m=>amoData.monthly[m]?.leads||0);
+  const won=months.map(m=>amoData.monthly[m]?.won||0);
+  const lost=months.map(m=>amoData.monthly[m]?.lost||0);
+
+  const fcLeads=forecast(leads,3);
+  const fcWon=forecast(won,3);
+  const fcLabels=['Прогноз +1','Прогноз +2','Прогноз +3'];
+  const allLabels=[...labels,...fcLabels];
+  const allLeads=[...leads,...fcLeads];
+  const allWon=[...won,...fcWon];
+
+  const ctx=document.getElementById('dealsChart').getContext('2d');
+  if(charts.deals) charts.deals.destroy();
+
+  charts.deals=new Chart(ctx,{
+    type:'bar',
+    data:{labels:allLabels,datasets:[
+      {label:'Лиды',data:allLeads,backgroundColor:allLeads.map((_,i)=>i<leads.length?'rgba(99,102,241,0.6)':'rgba(99,102,241,0.2)'),borderRadius:4,barPercentage:.35},
+      {label:'Выиграно',data:allWon,backgroundColor:allWon.map((_,i)=>i<won.length?'rgba(34,197,94,0.7)':'rgba(34,197,94,0.25)'),borderRadius:4,barPercentage:.35},
+      {label:'Проиграно',data:[...lost,...Array(3).fill(null)],backgroundColor:'rgba(239,68,68,0.4)',borderRadius:4,barPercentage:.35},
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      scales:{y:{grid:{color:'rgba(42,46,61,.3)'}}},
+      plugins:{annotation:{annotations:{
+        forecastLine:{type:'line',xMin:leads.length-.5,xMax:leads.length-.5,borderColor:'rgba(99,102,241,.4)',borderWidth:2,borderDash:[6,4],
+          label:{display:true,content:'Прогноз',position:'start',font:{size:9},color:'var(--accent)',backgroundColor:'rgba(99,102,241,.1)',padding:3}},
+        ...getEventAnnotations(months)
+      }}}
+    }
+  });
+}
+
+function renderEfficiency(){
+  const months=getAllMonths();
+  if(!months.length) return;
+  const labels=months.map(ml);
+  const gs=gsheetData?.monthly_totals||{};
+  const spend=months.map(m=>gs[m]?.fact||0);
+  const leads=months.map(m=>amoData?.monthly[m]?.leads||0);
+  const cpl=months.map((m,i)=>leads[i]>0&&spend[i]>0?Math.round(spend[i]/leads[i]):null);
+
+  const ctx=document.getElementById('efficiencyChart').getContext('2d');
+  if(charts.efficiency) charts.efficiency.destroy();
+
+  charts.efficiency=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Расход (факт), ₽',data:spend,backgroundColor:'rgba(245,158,11,0.5)',borderRadius:4,barPercentage:.5,yAxisID:'y'},
+      {type:'line',label:'Лиды',data:leads,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.1)',pointBackgroundColor:'#6366f1',borderWidth:2,yAxisID:'y1'},
+      {type:'line',label:'CPL, ₽',data:cpl,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,.1)',pointBackgroundColor:'#ef4444',borderWidth:2,borderDash:[4,3],yAxisID:'y2',spanGaps:true},
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      scales:{
+        y:{position:'left',grid:{color:'rgba(42,46,61,.3)'},title:{display:true,text:'Расход ₽',font:{size:9},color:'#f59e0b'},ticks:{callback:v=>fR(v)}},
+        y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Лиды',font:{size:9},color:'#6366f1'}},
+        y2:{position:'right',grid:{drawOnChartArea:false},display:false},
+      }
+    }
+  });
+}
+
+function renderTraffic(){
+  const canvas=document.getElementById('trafficChart');
+  const noData=document.getElementById('trafficNoData');
+
+  if(!metrikaData||!metrikaData.traffic||!metrikaData.traffic.data){
+    canvas.style.display='none';
+    noData.style.display='block';
+    return;
+  }
+  canvas.style.display='block';
+  noData.style.display='none';
+
+  const tData=metrikaData.traffic;
+  const labels=tData.time_intervals?tData.time_intervals.map(t=>{const d=t[0].split('-');return MN[d[1]]+"'"+d[0].slice(2)}):[];
+  const visits=(tData.data&&tData.data[0]&&tData.data[0].metrics)?tData.data[0].metrics[0]:[];
+
+  let organicVisits=[];
+  if(metrikaData.organic&&metrikaData.organic.data&&metrikaData.organic.data[0]){
+    organicVisits=metrikaData.organic.data[0].metrics[0]||[];
+  }
+  while(organicVisits.length<visits.length) organicVisits.push(0);
+
+  // Overlay leads from CRM if months match
+  const monthKeys=tData.time_intervals?tData.time_intervals.map(t=>t[0].slice(0,7)):[];
+  const leadsOverlay=amoData?monthKeys.map(m=>amoData.monthly[m]?.leads||0):[];
+  const evAnnotations=getEventAnnotations(monthKeys);
+
+  const ctx=canvas.getContext('2d');
+  if(charts.traffic) charts.traffic.destroy();
+
+  const datasets=[
+    {label:'Все визиты',data:visits,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.08)',fill:true,pointBackgroundColor:'#6366f1',borderWidth:2,yAxisID:'y'},
+    {label:'Органика',data:organicVisits,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.08)',fill:true,pointBackgroundColor:'#22c55e',borderWidth:2,yAxisID:'y'},
+  ];
+  if(leadsOverlay.some(v=>v>0)){
+    datasets.push({label:'Лиды (CRM)',data:leadsOverlay,borderColor:'#f59e0b',backgroundColor:'rgba(245,158,11,.1)',pointBackgroundColor:'#f59e0b',borderWidth:2,borderDash:[4,3],yAxisID:'y1'});
+  }
+
+  charts.traffic=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      scales:{
+        y:{grid:{color:'rgba(42,46,61,.3)'},title:{display:true,text:'Визиты',font:{size:9},color:'#8b8fa3'}},
+        y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Лиды',font:{size:9},color:'#f59e0b'}},
+      },
+      plugins:{annotation:{annotations:{...evAnnotations}}}}
+  });
+}
+
+function renderFunnel(){
+  if(!amoData) return;
+  const stages=amoData.active_funnel;
+  const total=stages.reduce((a,s)=>a+s[1],0);
+  const max=Math.max(...stages.map(s=>s[1]));
+  const colors=['#818cf8','#6366f1','#a78bfa','#f59e0b','#22d3ee','#8b8fa3','#ec4899'];
+  let html='';
+  stages.forEach(([stage,count],i)=>{
+    const w=Math.max(count/max*100,12);
+    html+=`<div class="funnel-stage"><div class="funnel-label">${stage}</div><div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${w}%;background:${colors[i%7]}">${count}</div></div><div class="funnel-pct">${Math.round(count/total*100)}%</div></div>`;
+  });
+  // Highlight bottleneck
+  const bottleneck=stages.reduce((a,s)=>s[1]>a[1]?s:a,['',0]);
+  html+=`<div style="margin-top:10px;font-size:11px;color:var(--muted)">Всего в работе: <b style="color:var(--text)">${total}</b> | Узкое место: <b style="color:var(--orange)">${bottleneck[0]} (${bottleneck[1]})</b></div>`;
+  document.getElementById('funnelContainer').innerHTML=html;
+}
+
+function renderReasons(){
+  if(!amoData) return;
+  const reasons=amoData.loss_reasons;
+  if(!reasons.length){
+    document.getElementById('reasonsContainer').innerHTML='<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">Нет данных об отказах</div>';
+    return;
+  }
+  const max=reasons[0]?reasons[0][1]:1;
+  const total=reasons.reduce((a,r)=>a+r[1],0);
+
+  // Smart color + recommendation per reason
+  function getReasonMeta(reason){
+    const r=reason.toLowerCase();
+    if(r.includes('целевой')||r.includes('квалиф')) return {color:'var(--red)',fix:'Пересмотрите таргетинг и квалификацию лидов'};
+    if(r.includes('дубль')) return {color:'var(--orange)',fix:'Настройте дедупликацию в CRM'};
+    if(r.includes('дорого')) return {color:'var(--pink)',fix:'Проработайте ценностное предложение'};
+    if(r.includes('дозвон')||r.includes('связь')||r.includes('пропал')) return {color:'var(--orange)',fix:'Ускорьте первый контакт (< 5 мин)'};
+    if(r.includes('потребность')) return {color:'var(--muted)',fix:'Нормальный отсев — следите за долей'};
+    if(r.includes('конкурент')) return {color:'var(--red)',fix:'Усильте конкурентные преимущества'};
+    return {color:'var(--muted)',fix:''};
+  }
+
+  let html='<table class="data-table"><thead><tr><th>Причина</th><th>Кол-во</th><th style="width:200px">Что делать</th></tr></thead><tbody>';
+  reasons.forEach(([reason,count])=>{
+    const meta=getReasonMeta(reason);
+    const pct=Math.round(count/total*100);
+    html+=`<tr>
+      <td><span style="color:${meta.color};font-weight:600">${reason}</span>
+        <div class="bar-mini"><div class="bar-mini-fill" style="width:${count/max*100}%;background:${meta.color}"></div></div>
+      </td>
+      <td><b>${count}</b> <span style="color:var(--muted);font-size:9px">(${pct}%)</span></td>
+      <td style="font-size:10px;color:var(--muted)">${meta.fix}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  html+=`<div style="margin-top:8px;font-size:11px;color:var(--muted)">Всего отказов: <b>${total}</b></div>`;
+  document.getElementById('reasonsContainer').innerHTML=html;
+}
+
+function renderConvCycle(){
+  if(!amoData) return;
+  const months=getAllMonths();
+  const labels=months.map(ml);
+  const conv=months.map(m=>{const d=amoData.monthly[m];return d&&d.leads>0?+(d.won/d.leads*100).toFixed(1):0});
+
+  // Cycle data by month if available
+  let cycleMonthly=[];
+  if(cycleData&&cycleData.monthly){
+    cycleMonthly=months.map(m=>cycleData.monthly[m]?cycleData.monthly[m].avg:null);
+  }
+
+  // Forecast conv
+  const fcConv=forecast(conv,2);
+  const allLabels=[...labels,'П+1','П+2'];
+  const allConv=[...conv,...Array(2).fill(null)];
+  const fcLine=[...Array(conv.length).fill(null),...fcConv.map(v=>Math.min(Math.max(v,0),100))];
+
+  const ctx=document.getElementById('convCycleChart').getContext('2d');
+  if(charts.convCycle) charts.convCycle.destroy();
+
+  const datasets=[
+    {label:'Конверсия %',data:allConv,borderColor:'#6366f1',backgroundColor:'rgba(99,102,241,.1)',fill:true,pointBackgroundColor:'#6366f1',yAxisID:'y'},
+    {label:'Прогноз конв.',data:fcLine,borderColor:'rgba(99,102,241,.4)',borderDash:[4,4],pointBackgroundColor:'rgba(99,102,241,.4)',spanGaps:false,yAxisID:'y'},
+  ];
+  if(cycleMonthly.some(v=>v!==null)){
+    datasets.push({label:'Цикл сделки (дни)',data:[...cycleMonthly,...Array(2).fill(null)],borderColor:'#f59e0b',pointBackgroundColor:'#f59e0b',borderDash:[3,2],yAxisID:'y1',spanGaps:true});
+  }
+
+  charts.convCycle=new Chart(ctx,{
+    type:'line',
+    data:{labels:allLabels,datasets},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      scales:{
+        y:{grid:{color:'rgba(42,46,61,.3)'},ticks:{callback:v=>v+'%'},max:Math.max(20,...conv)+5,min:0,title:{display:true,text:'Конверсия',font:{size:9},color:'#6366f1'}},
+        y1:{position:'right',grid:{drawOnChartArea:false},title:{display:true,text:'Дни',font:{size:9},color:'#f59e0b'}},
+      },
+      plugins:{annotation:{annotations:{
+        forecastLine:{type:'line',xMin:conv.length-.5,xMax:conv.length-.5,borderColor:'rgba(99,102,241,.3)',borderWidth:1,borderDash:[4,4]}
+      }}}
+    }
+  });
+}
+
+function renderYoY(){
+  if(!yoyData||!yoyData.months) return;
+  const months=yoyData.months;
+  const mKeys=Object.keys(months).sort();
+  const labels=mKeys.map(k=>MN[k]||k);
+  const leads25=mKeys.map(k=>months[k].leads_2025);
+  const leads26=mKeys.map(k=>months[k].leads_2026);
+
+  const ctx=document.getElementById('yoyChart').getContext('2d');
+  if(charts.yoy) charts.yoy.destroy();
+
+  charts.yoy=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'Лиды 2025',data:leads25,backgroundColor:'rgba(139,143,163,0.4)',borderRadius:4,barPercentage:.4},
+      {label:'Лиды 2026',data:leads26,backgroundColor:'rgba(99,102,241,0.7)',borderRadius:4,barPercentage:.4},
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      scales:{y:{grid:{color:'rgba(42,46,61,.3)'}}},
+      plugins:{legend:{labels:{boxWidth:8}}}
+    }
+  });
+
+  // Delta indicators
+  let deltaHtml='<div style="display:flex;gap:6px;flex-wrap:wrap">';
+  mKeys.forEach(k=>{
+    const l25=months[k].leads_2025;
+    const l26=months[k].leads_2026;
+    if(l25===0&&l26===0) return;
+    const diff=l26-l25;
+    const pct=l25>0?Math.round((diff/l25)*100):l26>0?100:0;
+    const isUp=diff>0;
+    const arrow=diff>0?'&#9650;':diff<0?'&#9660;':'=';
+    const clr=diff>0?'var(--green)':diff<0?'var(--red)':'var(--muted)';
+    const bg=diff>0?'rgba(34,197,94,.1)':diff<0?'rgba(239,68,68,.1)':'rgba(139,143,163,.1)';
+    deltaHtml+=`<span style="font-size:10px;padding:3px 8px;border-radius:5px;background:${bg};color:${clr};font-weight:600">${MN[k]} ${arrow} ${pct>=0?'+':''}${pct}%</span>`;
+  });
+  deltaHtml+='</div>';
+  document.getElementById('yoyDelta').innerHTML=deltaHtml;
+
+  // YoY table: won deals and budget comparison
+  let thtml='<table class="data-table"><thead><tr><th>Месяц</th><th>Выигр. 2025</th><th>Выигр. 2026</th><th>&#916;</th><th>Бюджет 2025</th><th>Бюджет 2026</th><th>&#916;</th></tr></thead><tbody>';
+  let totW25=0,totW26=0,totB25=0,totB26=0;
+  mKeys.forEach(k=>{
+    const m=months[k];
+    if(m.won_2025===0&&m.won_2026===0&&m.budget_2025===0&&m.budget_2026===0) return;
+    const wDiff=m.won_2026-m.won_2025;
+    const bDiff=m.budget_2026-m.budget_2025;
+    totW25+=m.won_2025;totW26+=m.won_2026;totB25+=m.budget_2025;totB26+=m.budget_2026;
+    thtml+=`<tr>
+      <td><b>${MN[k]}</b></td>
+      <td>${m.won_2025}</td>
+      <td style="color:var(--green)">${m.won_2026}</td>
+      <td style="color:${wDiff>0?'var(--green)':wDiff<0?'var(--red)':'var(--muted)'}"><b>${wDiff>0?'+':''}${wDiff}</b></td>
+      <td>${fR(m.budget_2025)}₽</td>
+      <td style="color:var(--green)">${fR(m.budget_2026)}₽</td>
+      <td style="color:${bDiff>0?'var(--green)':bDiff<0?'var(--red)':'var(--muted)'}">${bDiff>0?'+':''}${fR(bDiff)}₽</td>
+    </tr>`;
+  });
+  const twDiff=totW26-totW25;
+  const tbDiff=totB26-totB25;
+  thtml+=`<tr style="border-top:2px solid var(--border);font-weight:700">
+    <td>ИТОГО</td>
+    <td>${totW25}</td>
+    <td style="color:var(--green)">${totW26}</td>
+    <td style="color:${twDiff>0?'var(--green)':twDiff<0?'var(--red)':'var(--muted)'}">${twDiff>0?'+':''}${twDiff}</td>
+    <td>${fR(totB25)}₽</td>
+    <td style="color:var(--green)">${fR(totB26)}₽</td>
+    <td style="color:${tbDiff>0?'var(--green)':tbDiff<0?'var(--red)':'var(--muted)'}">${tbDiff>0?'+':''}${fR(tbDiff)}₽</td>
+  </tr>`;
+  thtml+='</tbody></table>';
+  document.getElementById('yoyTable').innerHTML=thtml;
+}
+
+function renderFunnelConv(){
+  if(!funnelData||!funnelData.stages) return;
+  const stages=funnelData.stages;
+  const maxCount=stages.length>0?stages[0].count:1;
+  const total=stages.length>0?stages[0].count:1;
+
+  // Funnel visualization
+  const funnelColors=['#818cf8','#6366f1','#a78bfa','#22d3ee','#f59e0b','#ec4899','#22c55e','#8b8fa3','#ef4444','#6366f1','#a78bfa','#22d3ee','#f59e0b'];
+  let html='';
+  stages.forEach((s,i)=>{
+    const w=maxCount>0?Math.max(s.count/maxCount*100,8):8;
+    // Step-to-step conversion
+    let stepConv='';
+    if(i>0&&stages[i-1].count>0){
+      const sc=Math.round(s.count/stages[i-1].count*100);
+      stepConv=`<span style="font-size:9px;color:var(--muted);margin-left:4px">(${sc}% от пред.)</span>`;
+    }
+    const lossHtml=s.loss>0?`<span style="font-size:9px;color:var(--red);margin-left:6px">-${s.loss} потерь</span>`:'';
+    html+=`<div class="funnel-stage">
+      <div class="funnel-label">${s.name}</div>
+      <div class="funnel-bar-wrap">
+        <div class="funnel-bar" style="width:${w}%;background:${funnelColors[i%funnelColors.length]}">${s.count}</div>
+      </div>
+      <div class="funnel-pct">${s.pct}%${stepConv}${lossHtml}</div>
+    </div>`;
+  });
+  document.getElementById('funnelConvContainer').innerHTML=html;
+
+  // Key conversions highlight
+  const kc=funnelData.key_conversions;
+  let kcHtml=`<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <div style="background:rgba(99,102,241,.06);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Контакт &rarr; Встреча</div>
+      <div style="font-size:24px;font-weight:700;color:var(--accent)">${kc.contact_to_meeting}%</div>
+    </div>
+    <div style="background:rgba(34,197,94,.06);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Встреча &rarr; Сделка</div>
+      <div style="font-size:24px;font-weight:700;color:var(--green)">${kc.meeting_to_deal}%</div>
+    </div>
+    <div style="background:rgba(245,158,11,.06);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+      <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Сделка &rarr; Выигрыш</div>
+      <div style="font-size:24px;font-weight:700;color:var(--orange)">${kc.deal_to_won}%</div>
+    </div>
+  </div>`;
+  document.getElementById('funnelKeyConv').innerHTML=kcHtml;
+
+  // Loss by stage
+  const lossByStage=funnelData.loss_by_stage||{};
+  const lossReasons=funnelData.loss_reasons||[];
+  const lossEntries=Object.entries(lossByStage).sort((a,b)=>b[1]-a[1]);
+  const totalLoss=lossEntries.reduce((s,e)=>s+e[1],0);
+  const maxLoss=lossEntries.length>0?lossEntries[0][1]:1;
+
+  let lhtml='<div style="margin-bottom:14px">';
+  if(lossEntries.length===0){
+    lhtml+='<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">Нет данных о потерях по этапам</div>';
+  } else {
+    lossEntries.forEach(([stage,count])=>{
+      const pct=totalLoss>0?Math.round(count/totalLoss*100):0;
+      const w=Math.max(count/maxLoss*100,5);
+      lhtml+=`<div style="display:flex;align-items:center;margin-bottom:6px">
+        <div style="width:160px;font-size:11px;color:var(--muted);text-align:right;flex-shrink:0;padding-right:10px">${stage}</div>
+        <div style="flex:1">
+          <div style="height:22px;border-radius:4px;width:${w}%;background:rgba(239,68,68,0.4);display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:600;color:var(--red)">${count}</div>
+        </div>
+        <div style="width:40px;font-size:10px;font-weight:600;padding-left:6px;color:var(--red)">${pct}%</div>
+      </div>`;
+    });
+  }
+  lhtml+='</div>';
+
+  // Loss reasons summary
+  if(lossReasons.length>0){
+    lhtml+='<div style="border-top:1px solid var(--border);padding-top:10px"><div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--muted)">Причины отказов (из воронки)</div>';
+    lhtml+='<table class="data-table"><thead><tr><th>Причина</th><th>Кол-во</th><th>%</th></tr></thead><tbody>';
+    const totalLR=lossReasons.reduce((s,r)=>s+r[1],0);
+    lossReasons.slice(0,8).forEach(([reason,count])=>{
+      const pct=totalLR>0?Math.round(count/totalLR*100):0;
+      lhtml+=`<tr><td style="color:var(--red)">${reason}</td><td><b>${count}</b></td><td>${pct}%</td></tr>`;
+    });
+    lhtml+='</tbody></table></div>';
+  }
+
+  document.getElementById('funnelLossContainer').innerHTML=lhtml;
+}
+
+function renderSourcesTable(){
+  if(!amoData) return;
+  const src=amoData.lead_sources;
+  if(!src.length){
+    document.getElementById('sourcesTable').innerHTML='<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">Поле «Лид пришёл» не заполняется — невозможно определить эффективность каналов.<br><span style="color:var(--red);font-weight:600">Критично: начните заполнять это поле в CRM</span></div>';
+    return;
+  }
+  const totalLeads=src.reduce((a,s)=>a+s[1].leads,0);
+  let html='<table class="data-table"><thead><tr><th>Источник</th><th>Лиды</th><th>%</th><th>Выиграно</th><th>Конверсия</th><th>Бюджет выигр.</th><th>Вердикт</th></tr></thead><tbody>';
+  src.forEach(([name,data])=>{
+    const pct=Math.round(data.leads/totalLeads*100);
+    const conv=data.leads>0?(data.won/data.leads*100).toFixed(1):0;
+    const convNum=parseFloat(conv);
+    let verdict='',verdictColor='var(--muted)';
+    if(data.won>0&&convNum>=10){verdict='Масштабировать';verdictColor='var(--green)'}
+    else if(data.won>0){verdict='Перспективный';verdictColor='var(--accent2)'}
+    else if(data.leads>=5&&data.won===0){verdict='Проверить качество';verdictColor='var(--orange)'}
+    else{verdict='Мало данных';verdictColor='var(--muted)'}
+
+    html+=`<tr>
+      <td><b>${name}</b></td>
+      <td>${data.leads}</td>
+      <td>${pct}%</td>
+      <td style="color:${data.won>0?'var(--green)':'var(--muted)'}">${data.won}</td>
+      <td style="color:${convNum>=10?'var(--green)':convNum>0?'var(--accent2)':'var(--muted)'}"><b>${conv}%</b></td>
+      <td>${data.budget>0?fR(data.budget)+'₽':'—'}</td>
+      <td style="color:${verdictColor};font-weight:600;font-size:10px">${verdict}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+
+  // Summary
+  const srcFilled=totalLeads;
+  const totalAll=amoData.totals.leads;
+  const fillPct=totalAll>0?Math.round(srcFilled/totalAll*100):0;
+  html+=`<div style="margin-top:8px;font-size:11px;color:var(--muted)">Источник указан у <b style="color:${fillPct>=70?'var(--green)':'var(--red)'};">${fillPct}%</b> лидов (${srcFilled} из ${totalAll})</div>`;
+
+  document.getElementById('sourcesTable').innerHTML=html;
+}
+
+function renderBudgetChart(){
+  const months=getMonths();
+  if(!months.length) return;
+  const labels=months.map(ml);
+  const gs=gsheetData?.monthly_totals||{};
+  const plan=months.map(m=>gs[m]?.plan||0);
+  const fact=months.map(m=>gs[m]?.fact||0);
+
+  const ctx=document.getElementById('budgetChart').getContext('2d');
+  if(charts.budget) charts.budget.destroy();
+
+  charts.budget=new Chart(ctx,{
+    type:'bar',
+    data:{labels,datasets:[
+      {label:'План',data:plan,backgroundColor:'rgba(99,102,241,0.3)',borderRadius:4,barPercentage:.4},
+      {label:'Факт',data:fact,backgroundColor:fact.map((f,i)=>f>plan[i]*1.1?'rgba(239,68,68,0.5)':'rgba(34,197,94,0.5)'),borderRadius:4,barPercentage:.4},
+    ]},
+    options:{responsive:true,interaction:{mode:'index',intersect:false},
+      scales:{y:{grid:{color:'rgba(42,46,61,.3)'},ticks:{callback:v=>fR(v)}}},
+    }
+  });
+}
+
+function renderEvents(){
+  if(!gsheetData||!gsheetData.activities||!gsheetData.activities.length) {
+    document.getElementById('eventsList').innerHTML='<div style="padding:20px;color:var(--muted);font-size:12px;text-align:center">Нажмите «Обновить Google Docs»</div>';
+    return;
+  }
+  const catMap={'Мероприятия внешние':'ext','Конетнт':'cont','Контент':'cont','Рейтинги и конкурсы':'rate','Мероприятия внутренние':'int','Прочее':'other','Платный трафик':'paid','SEO':'seo'};
+  const catLabel={ext:'Мероприятия',cont:'Контент',rate:'Рейтинги',int:'Внутренние',paid:'Платный трафик',seo:'SEO',other:'Прочее'};
+  const catColors={ext:'#ec4899',cont:'#22c55e',rate:'#f59e0b',int:'#a78bfa',paid:'#6366f1',seo:'#22d3ee',other:'#8b8fa3'};
+
+  const grouped={};
+  gsheetData.activities.forEach(e=>{
+    if(!e.activity&&!e.what) return;
+    const cat=Object.entries(catMap).find(([k])=>e.block.includes(k));
+    const catKey=cat?cat[1]:'other';
+    if(!grouped[e.month]) grouped[e.month]={};
+    if(!grouped[e.month][catKey]) grouped[e.month][catKey]=[];
+    grouped[e.month][catKey].push(e);
+  });
+
+  const months=Object.keys(grouped).sort();
+  let html='<table class="data-table"><thead><tr><th>Месяц</th><th>Категория</th><th>Активность</th><th style="text-align:right">Бюджет факт</th><th style="text-align:right">Лиды</th><th style="text-align:right">Касания</th><th style="text-align:right">CPL</th></tr></thead><tbody>';
+
+  months.forEach(mk=>{
+    const cats=grouped[mk];
+    const catKeys=Object.keys(cats).sort((a,b)=>{const ord={ext:0,rate:1,cont:2,int:3,paid:4,seo:5,other:6};return(ord[a]||6)-(ord[b]||6)});
+    let firstMonth=true;
+    let monthRows=0;
+    catKeys.forEach(ck=>monthRows+=cats[ck].length);
+
+    const allMonthActs=[];
+    catKeys.forEach(ck=>allMonthActs.push(...cats[ck]));
+    const mBudget=allMonthActs.reduce((s,e)=>s+(e.budget_fact||0),0);
+    const mLeads=allMonthActs.reduce((s,e)=>s+(e.leads||0),0);
+    const mTouches=allMonthActs.reduce((s,e)=>s+(e.touches||0),0);
+    const totalMonthRows=monthRows+1;
+
+    catKeys.forEach(ck=>{
+      const acts=cats[ck];
+      let firstCat=true;
+      acts.forEach(e=>{
+        html+='<tr>';
+        if(firstMonth){
+          html+=`<td rowspan="${totalMonthRows}" style="vertical-align:top;font-weight:700;font-size:13px;color:var(--accent);border-right:2px solid var(--border);padding-right:10px">${ml(mk)}</td>`;
+          firstMonth=false;
+        }
+        if(firstCat){
+          html+=`<td rowspan="${acts.length}" style="vertical-align:top"><span style="display:inline-block;padding:2px 7px;border-radius:4px;font-size:9px;font-weight:700;background:${catColors[ck]}22;color:${catColors[ck]};white-space:nowrap">${catLabel[ck]||ck}</span></td>`;
+          firstCat=false;
+        }
+        const name=e.activity?(e.what?`<b>${e.activity}</b> — ${e.what}`:`<b>${e.activity}</b>`):(e.what||'—');
+        const budgetStr=e.budget_fact>0?`<span style="color:var(--green);font-weight:600">${fR(e.budget_fact)}₽</span>`:e.budget_plan>0?`<span style="color:var(--muted)">${fR(e.budget_plan)}₽</span>`:'—';
+        const actCpl=e.leads>0&&e.budget_fact>0?Math.round(e.budget_fact/e.leads):null;
+        html+=`<td>${name}</td>`;
+        html+=`<td style="text-align:right">${budgetStr}</td>`;
+        html+=`<td style="text-align:right;color:${e.leads>0?'var(--accent)':'var(--muted)'}">${e.leads||'—'}</td>`;
+        html+=`<td style="text-align:right;color:${e.touches>0?'var(--text)':'var(--muted)'}">${e.touches||'—'}</td>`;
+        html+=`<td style="text-align:right;color:${actCpl?'var(--orange)':'var(--muted)'}"><b>${actCpl?fR(actCpl)+'₽':'—'}</b></td>`;
+        html+='</tr>';
+      });
+    });
+    // Month subtotal
+    const gs=gsheetData.monthly_totals||{};
+    const gm=gs[mk]||{};
+    const factFromGS=gm.fact||mBudget;
+    const mCpl=mLeads>0&&factFromGS>0?Math.round(factFromGS/mLeads):null;
+    html+=`<tr style="background:rgba(99,102,241,.04);border-top:1px solid var(--border)"><td colspan="2" style="font-weight:700;font-size:11px;color:var(--muted)">Итого ${ml(mk)}</td><td style="text-align:right;font-weight:700;color:var(--green)">${fR(factFromGS)}₽</td><td style="text-align:right;font-weight:700;color:var(--accent)">${mLeads||'—'}</td><td style="text-align:right;font-weight:700">${mTouches||'—'}</td><td style="text-align:right;font-weight:700;color:var(--orange)">${mCpl?fR(mCpl)+'₽':'—'}</td></tr>`;
+  });
+
+  const totalBudget=gsheetData.activities.reduce((s,e)=>s+(e.budget_fact||0),0);
+  const totalLeads=gsheetData.activities.reduce((s,e)=>s+(e.leads||0),0);
+  const totalTouches=gsheetData.activities.reduce((s,e)=>s+(e.touches||0),0);
+  const totalCpl=totalLeads>0&&totalBudget>0?Math.round(totalBudget/totalLeads):null;
+  html+=`<tr style="border-top:2px solid var(--border)"><td colspan="3" style="font-weight:700">ИТОГО</td><td style="text-align:right;font-weight:700;color:var(--green)">${fR(totalBudget)}₽</td><td style="text-align:right;font-weight:700;color:var(--accent)">${totalLeads||'—'}</td><td style="text-align:right;font-weight:700">${totalTouches||'—'}</td><td style="text-align:right;font-weight:700;color:var(--orange)">${totalCpl?fR(totalCpl)+'₽':'—'}</td></tr>`;
+  html+='</tbody></table>';
+  document.getElementById('eventsList').innerHTML=html;
+}
+
+function renderRecommendations(){
+  if(!amoData) return;
+  const months=getMonths();
+  const d=months.map(m=>amoData.monthly[m]).filter(Boolean);
+  const gs=gsheetData?.monthly_totals||{};
+  const tL=sum(d.map(x=>x.leads));
+  const tW=sum(d.map(x=>x.won));
+  const tWB=sum(d.map(x=>x.won_budget));
+  const totalSpend=sum(months.map(m=>gs[m]?.fact||0));
+  const conv=tL>0?(tW/tL*100):0;
+  const active=amoData.totals.active;
+  const topLoss=amoData.loss_reasons[0];
+  const lossTotal=amoData.loss_reasons.reduce((a,r)=>a+r[1],0);
+  const roas=totalSpend>0?(tWB/totalSpend):0;
+
+  // Source analysis
+  const src=amoData.lead_sources;
+  const bestSource=src.find(s=>s[1].won>0);
+  const worstSource=src.find(s=>s[1].leads>=5&&s[1].won===0);
+
+  // Funnel analysis
+  const bottleneck=amoData.active_funnel.reduce((a,s)=>s[1]>a[1]?s:a,['',0]);
+
+  const recs=[];
+
+  // 1. Source optimization
+  if(bestSource){
+    recs.push({
+      priority:'high',icon:'1',
+      text:`<b>Масштабируйте «${bestSource[0]}»</b> — этот канал приносит конверсии (${bestSource[1].won} выигр. из ${bestSource[1].leads} лидов). Увеличьте бюджет на этот источник.`,
+      impact:'money',impactText:'Рост выручки'
+    });
+  }
+  if(worstSource){
+    recs.push({
+      priority:'high',icon:'2',
+      text:`<b>Проверьте «${worstSource[0]}»</b> — ${worstSource[1].leads} лидов, 0 выигранных. Либо улучшите качество трафика, либо перенаправьте бюджет.`,
+      impact:'risk',impactText:'Экономия бюджета'
+    });
+  }
+
+  // 2. Loss reasons
+  if(topLoss){
+    const topPct=Math.round(topLoss[1]/lossTotal*100);
+    const r=topLoss[0].toLowerCase();
+    if(r.includes('целевой')||r.includes('квалиф')){
+      recs.push({priority:'high',icon:'!'+ '',text:`<b>Качество лидов — главная проблема.</b> ${topPct}% отказов — «${topLoss[0]}». Ужесточите квалификацию: добавьте предварительную анкету, проверяйте BANT-критерии до передачи в продажи.`,impact:'risk',impactText:'Снижение потерь'});
+    } else if(r.includes('дубль')){
+      recs.push({priority:'med',icon:'3',text:`<b>Настройте дедупликацию лидов.</b> ${topPct}% «дублей» — это потерянное время менеджеров. Автоматизируйте проверку в CRM.`,impact:'growth',impactText:'Эффективность'});
+    } else if(r.includes('дорого')){
+      recs.push({priority:'high',icon:'3',text:`<b>Проработайте ценностное предложение.</b> ${topPct}% клиентов считают «слишком дорого» — покажите ROI, добавьте кейсы с цифрами, предложите гибкие условия.`,impact:'money',impactText:'Рост конверсии'});
+    }
+  }
+
+  // 3. Funnel bottleneck
+  if(bottleneck[1]>=5){
+    recs.push({
+      priority:'med',icon: '' + (recs.length+1),
+      text:`<b>Разблокируйте «${bottleneck[0]}»</b> — ${bottleneck[1]} сделок застряли. Проведите ревизию: нужны ли дополнительные касания, презентации, или эти сделки мёртвые?`,
+      impact:'growth',impactText:'Ускорение цикла'
+    });
+  }
+
+  // 4. Conversion
+  if(conv<5&&tL>10){
+    recs.push({
+      priority:'high',icon:''+(recs.length+1),
+      text:`<b>Конверсия ${conv.toFixed(1)}% — ниже нормы для B2B (5-10%).</b> Сфокусируйтесь на квалификации лидов и скорости первого контакта. Цель — обработка нового лида за < 2 часа.`,
+      impact:'growth',impactText:'Рост конверсии'
+    });
+  }
+
+  // 5. Data quality
+  const srcFilled=src.reduce((a,s)=>a+s[1].leads,0);
+  const srcPct=tL>0?Math.round(srcFilled/tL*100):0;
+  if(srcPct<50){
+    recs.push({
+      priority:'med',icon:''+(recs.length+1),
+      text:`<b>Заполняйте поле «Лид пришёл» в CRM</b> — сейчас только ${srcPct}%. Без этого невозможно определить ROI каналов и правильно распределить бюджет.`,
+      impact:'growth',impactText:'Аналитика'
+    });
+  }
+
+  // 6. Budget
+  if(roas<1&&totalSpend>0){
+    recs.push({
+      priority:'high',icon:''+(recs.length+1),
+      text:`<b>Маркетинг пока не окупается (ROAS ${roas.toFixed(1)}x).</b> Но учитывайте длинный цикл сделки${cycleData?` (~${cycleData.avg} дней)`:''} — лиды этого периода могут конвертироваться позже. Следите за pipeline value (${fR(amoData.totals.total_budget)}₽).`,
+      impact:'risk',impactText:'Контроль'
+    });
+  } else if(roas>=3){
+    recs.push({
+      priority:'low',icon:''+(recs.length+1),
+      text:`<b>ROAS ${roas.toFixed(1)}x — отлично!</b> Маркетинг окупается. Рассмотрите увеличение бюджета на 20-30% с сохранением текущих каналов.`,
+      impact:'money',impactText:'Масштабирование'
+    });
+  }
+
+  // 7. Traffic
+  if(metrikaData&&metrikaData.traffic&&metrikaData.traffic.data&&metrikaData.traffic.data[0]){
+    const v=metrikaData.traffic.data[0].metrics[0];
+    let orgV=[];
+    if(metrikaData.organic&&metrikaData.organic.data&&metrikaData.organic.data[0]) orgV=metrikaData.organic.data[0].metrics[0]||[];
+    if(v.length>=2){
+      const lastVisits=v[v.length-1];
+      const orgLast=orgV[orgV.length-1]||0;
+      const orgPct=lastVisits>0?Math.round(orgLast/lastVisits*100):0;
+      if(orgPct<20){
+        recs.push({
+          priority:'med',icon:''+(recs.length+1),
+          text:`<b>Органика только ${orgPct}% трафика.</b> Инвестируйте в SEO и контент-маркетинг — это самый дешёвый канал в долгосроке. Цель: ${orgPct+15}% через 6 месяцев.`,
+          impact:'money',impactText:'Снижение CPL'
+        });
+      }
+    }
+  }
+
+  // Render
+  let html='';
+  recs.sort((a,b)=>{const p={high:0,med:1,low:2};return p[a.priority]-p[b.priority]});
+  recs.forEach((r,i)=>{
+    html+=`<div class="rec-item">
+      <div class="rec-priority ${r.priority}">${i+1}</div>
+      <div class="rec-text">${r.text}<br><span class="rec-impact ${r.impact}">${r.impactText}</span></div>
+    </div>`;
+  });
+  if(!recs.length) html='<div style="padding:16px;color:var(--muted);text-align:center">Недостаточно данных для рекомендаций</div>';
+  document.getElementById('recsContainer').innerHTML=html;
+}
+
+function renderMonthlyTable(){
+  if(!amoData) return;
+  const months=Object.keys(amoData.monthly).sort();
+  const gs=gsheetData?.monthly_totals||{};
+
+  let html='<table class="data-table"><thead><tr><th>Месяц</th><th>Лиды</th><th>Выигр.</th><th>Проигр.</th><th>Конв%</th><th>Бюджет выигр.</th><th>Расход факт</th><th>CPL</th><th>ROAS</th><th>Ср.чек</th></tr></thead><tbody>';
+  let totLeads=0,totWon=0,totLost=0,totWB=0,totSpend=0;
+
+  months.forEach(mk=>{
+    const m=amoData.monthly[mk];
+    const g=gs[mk]||{};
+    const conv=m.leads>0?(m.won/m.leads*100).toFixed(1):'—';
+    const spend=g.fact||0;
+    const cpl=m.leads>0&&spend>0?Math.round(spend/m.leads):null;
+    const mRoas=spend>0&&m.won_budget>0?(m.won_budget/spend).toFixed(1):null;
+    const avgCheck=m.won>0?Math.round(m.won_budget/m.won):null;
+
+    totLeads+=m.leads;totWon+=m.won;totLost+=m.lost;totWB+=m.won_budget;totSpend+=spend;
+
+    html+=`<tr>
+      <td><b>${ml(mk)}</b></td>
+      <td>${m.leads}</td>
+      <td style="color:var(--green)">${m.won}</td>
+      <td style="color:var(--red)">${m.lost}</td>
+      <td style="color:${parseFloat(conv)>=5?'var(--green)':parseFloat(conv)>0?'var(--orange)':'var(--muted)'}">${conv}%</td>
+      <td>${fR(m.won_budget)}₽</td>
+      <td>${spend>0?fR(spend)+'₽':'—'}</td>
+      <td style="color:${cpl?'var(--orange)':'var(--muted)'}">${cpl?fR(cpl)+'₽':'—'}</td>
+      <td style="color:${mRoas&&parseFloat(mRoas)>=1?'var(--green)':'var(--muted)'}">${mRoas?mRoas+'x':'—'}</td>
+      <td>${avgCheck?fR(avgCheck)+'₽':'—'}</td>
+    </tr>`;
+  });
+
+  // Totals row
+  const tConv=totLeads>0?(totWon/totLeads*100).toFixed(1):'—';
+  const tCpl=totLeads>0&&totSpend>0?Math.round(totSpend/totLeads):null;
+  const tRoas=totSpend>0&&totWB>0?(totWB/totSpend).toFixed(1):null;
+  const tAvgCheck=totWon>0?Math.round(totWB/totWon):null;
+  html+=`<tr style="border-top:2px solid var(--border);font-weight:700">
+    <td>ИТОГО</td>
+    <td>${totLeads}</td>
+    <td style="color:var(--green)">${totWon}</td>
+    <td style="color:var(--red)">${totLost}</td>
+    <td>${tConv}%</td>
+    <td>${fR(totWB)}₽</td>
+    <td>${totSpend>0?fR(totSpend)+'₽':'—'}</td>
+    <td style="color:var(--orange)">${tCpl?fR(tCpl)+'₽':'—'}</td>
+    <td style="color:${tRoas&&parseFloat(tRoas)>=1?'var(--green)':'var(--red)'}">${tRoas?tRoas+'x':'—'}</td>
+    <td>${tAvgCheck?fR(tAvgCheck)+'₽':'—'}</td>
+  </tr>`;
+  html+='</tbody></table>';
+  document.getElementById('monthlyTableContainer').innerHTML=html;
+}
+
+function renderAll(){
+  try{ renderMonthTabs() }catch(e){console.error('renderMonthTabs:',e)}
+  try{ renderExecSummary() }catch(e){console.error('renderExecSummary:',e)}
+  try{ renderKPIs() }catch(e){console.error('renderKPIs:',e)}
+  try{ renderDeals() }catch(e){console.error('renderDeals:',e)}
+  try{ renderEfficiency() }catch(e){console.error('renderEfficiency:',e)}
+  try{ renderYoY() }catch(e){console.error('renderYoY:',e)}
+  try{ renderFunnelConv() }catch(e){console.error('renderFunnelConv:',e)}
+  try{ renderTraffic() }catch(e){console.error('renderTraffic:',e)}
+  try{ renderFunnel() }catch(e){console.error('renderFunnel:',e)}
+  try{ renderReasons() }catch(e){console.error('renderReasons:',e)}
+  try{ renderConvCycle() }catch(e){console.error('renderConvCycle:',e)}
+  try{ renderSourcesTable() }catch(e){console.error('renderSourcesTable:',e)}
+  try{ renderBudgetChart() }catch(e){console.error('renderBudgetChart:',e)}
+  try{ renderEvents() }catch(e){console.error('renderEvents:',e)}
+  try{ renderRecommendations() }catch(e){console.error('renderRecommendations:',e)}
+  try{ renderMonthlyTable() }catch(e){console.error('renderMonthlyTable:',e)}
+}
+
+async function setProject(p){
+  currentProject=p;
+  document.querySelectorAll('#projectTabs .period-btn').forEach(b=>{
+    b.classList.toggle('active',
+      (p==='main'&&b.textContent==='ИдаПроджект')||(p==='lite'&&b.textContent==='ИдаЛайт'));
+  });
+  const name=PROJECT_NAMES[p];
+  document.getElementById('headerTitle').innerHTML=`<span>${p==='main'?'ида':'ида'}</span>${p==='main'?'Проджект':'Лайт'} — Marketing Dashboard`;
+  document.title='Marketing Dashboard — '+name;
+  const sub=document.getElementById('dealsChartSub');
+  if(sub) sub.textContent='AmoCRM '+name+' — лиды, выигрыши, прогноз + маркетинговые события';
+  amoData=null;metrikaData=null;gsheetData=null;cycleData=null;yoyData=null;funnelData=null;
+  document.getElementById('execSummary').innerHTML='<h2>Загрузка данных '+name+'...</h2>';
+  const status=await fetchStatus();
+  renderConnBar(status);
+  await Promise.all([fetchAmo(),fetchMetrika(),fetchGSheet(),fetchCycle(),fetchYoY(),fetchFunnel()]);
+  const newStatus=await fetchStatus();
+  renderConnBar(newStatus);
+  renderAll();
+}
+
+function setPeriod(p){
+  period=p;
+  document.querySelectorAll('#monthTabs .period-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.period===p);
+  });
+  renderAll();
+}
+
+function renderMonthTabs(){
+  if(!amoData) return;
+  const all=Object.keys(amoData.monthly).sort();
+  const lastMk=all[all.length-1];
+  const isLatest=period==='latest'||(!all.includes(period)&&period!=='all');
+  let html=`<button class="period-btn ${period==='all'?'active':''}" data-period="all" onclick="setPeriod('all')">Все</button>`;
+  all.forEach(mk=>{
+    const active=(period===mk)||(isLatest&&mk===lastMk);
+    html+=`<button class="period-btn ${active?'active':''}" data-period="${mk}" onclick="setPeriod('${mk}')">${ml(mk)}</button>`;
+  });
+  document.getElementById('monthTabs').innerHTML=html;
+}
+
+async function refreshAll(){
+  forceRefresh=true;
+  await Promise.all([fetchAmo(),fetchMetrika(),fetchGSheet(),fetchCycle(),fetchYoY(),fetchFunnel()]);
+  forceRefresh=false;
+  renderAll();
+}
+
+async function refreshGSheet(){
+  forceRefresh=true;
+  await fetchGSheet();
+  forceRefresh=false;
+  renderEvents();
+}
+
+// ============================================================
+// INIT + AUTO-REFRESH every 3 hours
+// ============================================================
+async function init(){
+  const status=await fetchStatus();
+  renderConnBar(status);
+  await Promise.all([fetchAmo(),fetchMetrika(),fetchGSheet(),fetchCycle(),fetchYoY(),fetchFunnel()]);
+  const newStatus=await fetchStatus();
+  renderConnBar(newStatus);
+  renderAll();
+  // Auto-refresh every 3 hours
+  setInterval(async()=>{
+    forceRefresh=true;
+    await Promise.all([fetchAmo(),fetchMetrika(),fetchGSheet(),fetchCycle(),fetchYoY(),fetchFunnel()]);
+    forceRefresh=false;
+    renderAll();
+  }, 3*60*60*1000);
+}
+init();
+</script>
+</body>
+</html>
