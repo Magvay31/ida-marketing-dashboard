@@ -1512,15 +1512,18 @@ function renderErzSummary(rows){
   const litePct=total>0?Math.round(liteTouched/total*100):0;
   const anyPct=total>0?Math.round(anyTouched/total*100):0;
   const top200=rows.filter(r=>r.rank<=200);
+  const below200=rows.filter(r=>r.rank>200);
   const top200MainN=top200.filter(r=>r.main_deals>0).length;
   const top200LiteN=top200.filter(r=>r.lite_touches>0).length;
+  const below200LiteN=below200.filter(r=>r.lite_touches>0).length;
+  const below200Pct=below200.length>0?Math.round(below200LiteN/below200.length*100):0;
   const cards=[
-    {label:'Всего застройщиков',value:'2 881',color:'var(--text)'},
-    {label:'ИдаПроджект',value:`${mainTouched} (${mainPct}%)`,color:'var(--accent)'},
-    {label:'ИдаЛайт касания',value:`${liteTouched} (${litePct}%)`,color:'var(--accent2)'},
-    {label:'Касание любой',value:`${anyTouched} (${anyPct}%)`,color:'var(--green)'},
-    {label:'ТОП-200 ИдаПроджект',value:`${top200MainN}/200`,color:'var(--orange)'},
-    {label:'ТОП-200 ИдаЛайт',value:`${top200LiteN}/200`,color:'var(--orange)'},
+    {label:'Всего ЕРЗ',value:`${total.toLocaleString('ru-RU')}`,color:'var(--text)'},
+    {label:'ИдаПроджект (ТОП-200)',value:`${top200MainN} из 200 (${Math.round(top200MainN/2)}%)`,color:'var(--accent)'},
+    {label:'ИдаЛайт (201–2881)',value:`${below200LiteN} из ${below200.length} (${below200Pct}%)`,color:'var(--accent2)'},
+    {label:'Всего касаний',value:`${anyTouched} (${anyPct}%)`,color:'var(--green)'},
+    {label:'ТОП-200 в ИдаЛайт',value:`${top200LiteN} (пересечение)`,color:'var(--orange)',sub:'можно передать в ИдаПроджект'},
+    {label:'Без касаний',value:`${total-anyTouched}`,color:'var(--red)'},
   ];
   document.getElementById('erzSummaryCards').innerHTML=cards.map(c=>`
     <div class="kpi-card">
