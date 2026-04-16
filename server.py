@@ -1020,7 +1020,7 @@ def api_amo_funnel():
 
 @app.route('/api/erz/data')
 def api_erz_data():
-    data_file = os.path.join(os.path.dirname(__file__), 'data', 'erz_top100.json')
+    data_file = os.path.join(os.path.dirname(__file__), 'data', 'erz_full.json')
     if os.path.exists(data_file):
         with open(data_file) as f:
             return jsonify({'ok': True, 'data': json.load(f)})

@@ -151,7 +151,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     <div class="period-selector" id="projectTabs">
       <button class="period-btn active" onclick="setProject('main')">ИдаПроджект</button>
       <button class="period-btn" onclick="setProject('lite')">ИдаЛайт</button>
-      <button class="period-btn" onclick="setView('erz')">ЕРЗ ТОП-100</button>
+      <button class="period-btn" onclick="setView('erz')">ЕРЗ застройщики</button>
     </div>
   </div>
   <div class="header-right">
@@ -300,34 +300,41 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   <div class="updated-at" id="updatedAt"></div>
 </div>
 
-<!-- ERZ TOP-100 SECTION -->
+<!-- ERZ FULL SECTION -->
 <div id="erzSection" style="display:none;padding:20px 28px">
   <div id="erzSummaryCards" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px"></div>
   <div class="chart-card" style="padding:0;overflow:hidden">
     <div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)">
-      <h3>ЕРЗ ТОП-100 — Статус работы с застройщиками</h3>
-      <div class="sub">Отсортировано по дате последнего контакта (сначала свежие); Нет касаний — в конце</div>
+      <h3>ЕРЗ — Статус работы с застройщиками</h3>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap">
+        <button class="period-btn active" id="erzFilter-all" onclick="setErzFilter('all')">Все</button>
+        <button class="period-btn active" id="erzFilter-top200" onclick="setErzFilter('top200')">ТОП-200</button>
+        <button class="period-btn" id="erzFilter-top100" onclick="setErzFilter('top100')">ТОП-100</button>
+        <button class="period-btn" id="erzFilter-touched" onclick="setErzFilter('touched')">С касаниями</button>
+        <button class="period-btn" id="erzFilter-nomaintouche" onclick="setErzFilter('nomaintouche')">Без касаний Main</button>
+        <button class="period-btn" id="erzFilter-nolitetouche" onclick="setErzFilter('nolitetouche')">Без касаний Lite</button>
+      </div>
+      <div id="erzCountDisplay" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
     </div>
-    <div style="overflow-x:auto">
-      <table class="data-table" id="erzTable" style="min-width:1100px">
+    <div style="overflow-x:auto;max-height:600px;overflow-y:auto">
+      <table class="data-table" id="erzTable" style="min-width:1200px">
         <thead>
           <tr>
             <th>#</th>
             <th>Компания</th>
-            <th>м²</th>
-            <th>Рейтинг ЕРЗ</th>
-            <th>Статус</th>
-            <th>Сделок</th>
-            <th>Акт.</th>
-            <th>Реализ.</th>
-            <th>Первый контакт</th>
-            <th>Последний контакт</th>
-            <th>Сводка</th>
+            <th>Регион</th>
+            <th>Main (сделок)</th>
+            <th>Main Won</th>
+            <th>Main Active</th>
+            <th>Main Lost</th>
+            <th>Последний Main</th>
+            <th>Lite (касаний)</th>
+            <th>Sales статус</th>
+            <th>Последний Sales контакт</th>
             <th>Бюджет</th>
-            <th>ЛПР</th>
           </tr>
         </thead>
-        <tbody id="erzTableBody"><tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr></tbody>
+        <tbody id="erzTableBody"><tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr></tbody>
       </table>
     </div>
   </div>
@@ -1056,17 +1063,45 @@ function renderFunnelConv(){
 
   // Loss reasons summary
   if(lossReasons.length>0){
+    const lossDetails=funnelData.loss_details||{};
     lhtml+='<div style="border-top:1px solid var(--border);padding-top:10px"><div style="font-size:11px;font-weight:600;margin-bottom:8px;color:var(--muted)">Причины отказов (из воронки)</div>';
     lhtml+='<table class="data-table"><thead><tr><th>Причина</th><th>Кол-во</th><th>%</th></tr></thead><tbody>';
     const totalLR=lossReasons.reduce((s,r)=>s+r[1],0);
-    lossReasons.slice(0,8).forEach(([reason,count])=>{
+    lossReasons.slice(0,8).forEach(([reason,count],idx)=>{
       const pct=totalLR>0?Math.round(count/totalLR*100):0;
-      lhtml+=`<tr><td style="color:var(--red)">${reason}</td><td><b>${count}</b></td><td>${pct}%</td></tr>`;
+      const hasDetails=lossDetails[reason]&&lossDetails[reason].length>0;
+      const cursor=hasDetails?'cursor:pointer':'';
+      const arrow=hasDetails?` <span id="loss-arrow-${idx}" style="font-size:9px;color:var(--muted)">&#9654;</span>`:'';
+      lhtml+=`<tr style="${cursor}" onclick="${hasDetails?`toggleLossDetail(${idx})`:''}">`;
+      lhtml+=`<td style="color:var(--red)">${reason}${arrow}</td><td><b>${count}</b></td><td>${pct}%</td></tr>`;
+      if(hasDetails){
+        const deals=lossDetails[reason];
+        const dealsHtml=deals.map(d=>{
+          const price=d.price?fR(d.price)+' ₽':'—';
+          const date=d.created||'';
+          const comment=d.comment?`<span style="color:var(--muted)"> — ${d.comment}</span>`:'';
+          return `<div style="padding:3px 0;border-bottom:1px solid var(--border)">`+
+            `<span style="font-weight:600;font-size:11px">${d.name||'—'}</span>`+
+            `<span style="color:var(--muted);font-size:10px;margin-left:8px">${price}</span>`+
+            `<span style="color:var(--muted);font-size:10px;margin-left:8px">${date}</span>`+
+            `${comment}</div>`;
+        }).join('');
+        lhtml+=`<tr id="loss-detail-${idx}" style="display:none"><td colspan="3" style="padding:8px 16px;background:rgba(139,143,163,.07);font-size:11px">${dealsHtml}</td></tr>`;
+      }
     });
     lhtml+='</tbody></table></div>';
   }
 
   document.getElementById('funnelLossContainer').innerHTML=lhtml;
+}
+
+function toggleLossDetail(idx){
+  const row=document.getElementById('loss-detail-'+idx);
+  const arrow=document.getElementById('loss-arrow-'+idx);
+  if(!row) return;
+  const open=row.style.display==='none';
+  row.style.display=open?'':'none';
+  if(arrow) arrow.innerHTML=open?'&#9660;':'&#9654;';
 }
 
 function renderSourcesTable(){
@@ -1413,7 +1448,7 @@ function renderAll(){
 }
 
 // ============================================================
-// ERZ TOP-100
+// ERZ FULL (2881 companies)
 // ============================================================
 const ERZ_STATUS_BADGE = {
   'Текущий клиент': {color:'var(--green)',bg:'rgba(34,197,94,.12)'},
@@ -1422,96 +1457,132 @@ const ERZ_STATUS_BADGE = {
   'Нет касаний':     {color:'var(--muted)',bg:'rgba(139,143,163,.1)'},
 };
 
+let erzCurrentFilter = 'top200';
+
 function erzStatusBadge(status){
   const s=ERZ_STATUS_BADGE[status]||{color:'var(--muted)',bg:'rgba(139,143,163,.1)'};
   return `<span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;color:${s.color};background:${s.bg}">${status||'—'}</span>`;
 }
 
-function erzParseDate(str){
-  if(!str) return null;
-  const [d,m,y]=str.split('.');
-  if(!d||!m||!y) return null;
-  return new Date(+y,+m-1,+d);
+function erzFmtDate(str){
+  // Input: "YYYY-MM-DD" or "DD.MM.YYYY" or "DD.MM.YY" — output: "DD.MM.YY"
+  if(!str) return '—';
+  if(str.includes('-')){
+    const parts=str.split('-');
+    if(parts.length===3){
+      const yy=parts[0].slice(2);
+      return `${parts[2]}.${parts[1]}.${yy}`;
+    }
+  }
+  // Already DD.MM.YYYY or DD.MM.YY
+  const p=str.split('.');
+  if(p.length===3){
+    const yy=p[2].length===4?p[2].slice(2):p[2];
+    return `${p[0]}.${p[1]}.${yy}`;
+  }
+  return str;
 }
 
-function erzSortRows(rows){
-  const noContact=rows.filter(r=>r.status==='Нет касаний');
-  const hasContact=rows.filter(r=>r.status!=='Нет касаний');
-  hasContact.sort((a,b)=>{
-    const da=erzParseDate(a.last_contact), db=erzParseDate(b.last_contact);
-    if(da&&db) return db-da;
-    if(da) return -1;
-    if(db) return 1;
-    return 0;
+function erzFilterRows(rows, filter){
+  switch(filter){
+    case 'top200': return rows.filter(r=>r.rank<=200);
+    case 'top100': return rows.filter(r=>r.rank<=100);
+    case 'touched': return rows.filter(r=>(r.main_deals>0)||(r.lite_touches>0));
+    case 'nomaintouche': return rows.filter(r=>!r.main_deals||r.main_deals===0);
+    case 'nolitetouche': return rows.filter(r=>!r.lite_touches||r.lite_touches===0);
+    default: return rows; // 'all'
+  }
+}
+
+function setErzFilter(filter){
+  erzCurrentFilter=filter;
+  document.querySelectorAll('[id^="erzFilter-"]').forEach(b=>{
+    b.classList.toggle('active', b.id==='erzFilter-'+filter);
   });
-  return [...hasContact,...noContact];
+  if(erzData) renderErzTable(erzFilterRows(erzData, filter));
 }
 
 function renderErzSummary(rows){
   const total=rows.length;
-  const curr=rows.filter(r=>r.status==='Текущий клиент').length;
-  const talked=rows.filter(r=>r.status==='Общались').length;
-  const none=rows.filter(r=>r.status==='Нет касаний').length;
-  const lpr=rows.filter(r=>r.has_lpr&&r.has_lpr!=='').length;
-  const budgetSum=rows.reduce((s,r)=>s+(r.budget||0),0);
+  const mainTouched=rows.filter(r=>r.main_deals>0).length;
+  const liteTouched=rows.filter(r=>r.lite_touches>0).length;
+  const anyTouched=rows.filter(r=>(r.main_deals>0)||(r.lite_touches>0)).length;
+  const mainPct=total>0?Math.round(mainTouched/total*100):0;
+  const litePct=total>0?Math.round(liteTouched/total*100):0;
+  const anyPct=total>0?Math.round(anyTouched/total*100):0;
+  const top200=rows.filter(r=>r.rank<=200);
+  const top200MainN=top200.filter(r=>r.main_deals>0).length;
+  const top200LiteN=top200.filter(r=>r.lite_touches>0).length;
   const cards=[
-    {label:'Всего компаний',value:total,color:'var(--text)'},
-    {label:'Текущие клиенты',value:curr,color:'var(--green)'},
-    {label:'Общались',value:talked,color:'var(--accent2)'},
-    {label:'Нет касаний',value:none,color:'var(--muted)'},
-    {label:'Есть ЛПР',value:lpr,color:'var(--accent)'},
-    {label:'Бюджет реализ.',value:fR(budgetSum),color:'var(--orange)',raw:true},
+    {label:'Всего застройщиков',value:'2 881',color:'var(--text)'},
+    {label:'Касание Main',value:`${mainTouched} (${mainPct}%)`,color:'var(--accent)'},
+    {label:'Касание Lite',value:`${liteTouched} (${litePct}%)`,color:'var(--accent2)'},
+    {label:'Касание любой',value:`${anyTouched} (${anyPct}%)`,color:'var(--green)'},
+    {label:'TOP-200 Main',value:`${top200MainN}/200`,color:'var(--orange)'},
+    {label:'TOP-200 Lite',value:`${top200LiteN}/200`,color:'var(--orange)'},
   ];
   document.getElementById('erzSummaryCards').innerHTML=cards.map(c=>`
     <div class="kpi-card">
       <div class="kpi-label">${c.label}</div>
-      <div class="kpi-value" style="font-size:20px;color:${c.color}">${c.raw?c.value:c.value}</div>
+      <div class="kpi-value" style="font-size:18px;color:${c.color}">${c.value}</div>
     </div>`).join('');
 }
 
-function renderErzTable(rows){
-  const sorted=erzSortRows(rows);
-  document.getElementById('erzTableBody').innerHTML=sorted.map((r,i)=>{
-    const dim=r.status==='Нет касаний'?'opacity:.5':'';
-    const highlight=r.status==='Текущий клиент'?'background:rgba(34,197,94,.03)':'';
-    const summary=r.deal_summary||'';
-    const summaryShort=summary.length>50?summary.slice(0,50)+'…':summary;
-    const summaryTip=summary.length>50?`title="${summary.replace(/"/g,'&quot;')}"`:'' ;
-    const sqm=r.sqm?fNum(r.sqm):'—';
-    const budget=r.budget?fNum(r.budget)+' ₽':'—';
-    return `<tr style="${dim};${highlight}">
+function renderErzTable(filtered){
+  const COLS=12;
+  if(!filtered||filtered.length===0){
+    document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="${COLS}" style="text-align:center;color:var(--muted);padding:24px">Нет данных</td></tr>`;
+    document.getElementById('erzCountDisplay').textContent='';
+    return;
+  }
+  document.getElementById('erzCountDisplay').textContent=`Показано ${filtered.length} из ${erzData?erzData.length:filtered.length}`;
+  document.getElementById('erzTableBody').innerHTML=filtered.map((r)=>{
+    const hasAny=(r.main_deals>0)||(r.lite_touches>0);
+    const dim=!hasAny?'opacity:.45':'';
+    let borderStyle='';
+    if(r.main_won>0) borderStyle='border-left:3px solid var(--green)';
+    else if(r.main_active>0) borderStyle='border-left:3px solid var(--accent)';
+    const lastMain=erzFmtDate(r.main_last);
+    const lastSales=erzFmtDate(r.sales_last_contact);
+    const budget=(r.sales_budget&&r.sales_budget>0)?fR(r.sales_budget)+' ₽':'—';
+    const company=r.company||'—';
+    const region=r.region||'—';
+    return `<tr style="${dim};${borderStyle}">
       <td style="color:var(--muted);font-size:10px">${r.rank}</td>
-      <td style="font-weight:600;max-width:200px">${r.company||'—'}</td>
-      <td style="color:var(--muted)">${sqm}</td>
-      <td style="text-align:center">${r.erz_rating||'—'}</td>
-      <td>${erzStatusBadge(r.status)}</td>
-      <td style="text-align:center">${r.deals||0}</td>
-      <td style="text-align:center">${r.active||0}</td>
-      <td style="text-align:center">${r.realized||0}</td>
-      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${r.first_contact||'—'}</td>
-      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${r.last_contact||'—'}</td>
-      <td style="color:var(--muted);font-size:10px;max-width:160px" ${summaryTip}>${summaryShort||'—'}</td>
+      <td style="font-weight:600;max-width:200px">${company}</td>
+      <td style="color:var(--muted);font-size:10px;max-width:120px">${region}</td>
+      <td style="text-align:center">${r.main_deals||0}</td>
+      <td style="text-align:center;color:var(--green)">${r.main_won||0}</td>
+      <td style="text-align:center;color:var(--accent)">${r.main_active||0}</td>
+      <td style="text-align:center;color:var(--red)">${r.main_lost||0}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastMain}</td>
+      <td style="text-align:center">${r.lite_touches||0}</td>
+      <td>${erzStatusBadge(r.sales_status)}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastSales}</td>
       <td style="white-space:nowrap">${budget}</td>
-      <td style="text-align:center;font-size:10px">${r.has_lpr||'—'}</td>
     </tr>`;
   }).join('');
 }
 
 async function fetchAndRenderErz(){
   if(!erzData){
-    document.getElementById('erzTableBody').innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr>';
+    document.getElementById('erzTableBody').innerHTML='<tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr>';
     try{
       const res=await fetch('/api/erz/data');
       const json=await res.json();
       if(json.ok) erzData=json.data;
-      else{ document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="13" style="text-align:center;color:var(--red);padding:24px">${json.error||'Ошибка'}</td></tr>`; return; }
+      else{ document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="12" style="text-align:center;color:var(--red);padding:24px">${json.error||'Ошибка'}</td></tr>`; return; }
     }catch(e){
-      document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="13" style="text-align:center;color:var(--red);padding:24px">Ошибка загрузки</td></tr>`;
+      document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="12" style="text-align:center;color:var(--red);padding:24px">Ошибка загрузки</td></tr>`;
       return;
     }
   }
   renderErzSummary(erzData);
-  renderErzTable(erzData);
+  // Sync filter button state
+  document.querySelectorAll('[id^="erzFilter-"]').forEach(b=>{
+    b.classList.toggle('active', b.id==='erzFilter-'+erzCurrentFilter);
+  });
+  renderErzTable(erzFilterRows(erzData, erzCurrentFilter));
 }
 
 function setView(v){
@@ -1519,7 +1590,7 @@ function setView(v){
   const mainDiv=document.querySelector('div.main');
   const erzDiv=document.getElementById('erzSection');
   document.querySelectorAll('#projectTabs .period-btn').forEach(b=>{
-    b.classList.toggle('active', b.textContent==='ЕРЗ ТОП-100'&&v==='erz');
+    b.classList.toggle('active', b.textContent==='ЕРЗ застройщики'&&v==='erz');
   });
   if(v==='erz'){
     mainDiv.style.display='none';
