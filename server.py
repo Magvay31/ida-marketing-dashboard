@@ -999,6 +999,7 @@ def api_amo_funnel():
                 created = datetime.fromtimestamp(lead['created_at']).strftime('%Y-%m-%d')
                 price = lead.get('price', 0) or 0
                 loss_reasons_details[reason].append({
+                    'id': lead.get('id'),
                     'name': lead.get('name', '')[:60],
                     'price': price,
                     'created': created,
