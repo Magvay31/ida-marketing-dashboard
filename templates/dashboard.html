@@ -311,8 +311,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         <button class="period-btn active" id="erzFilter-top200" onclick="setErzFilter('top200')">ТОП-200</button>
         <button class="period-btn" id="erzFilter-top100" onclick="setErzFilter('top100')">ТОП-100</button>
         <button class="period-btn" id="erzFilter-touched" onclick="setErzFilter('touched')">С касаниями</button>
-        <button class="period-btn" id="erzFilter-nomaintouche" onclick="setErzFilter('nomaintouche')">Без касаний Main</button>
-        <button class="period-btn" id="erzFilter-nolitetouche" onclick="setErzFilter('nolitetouche')">Без касаний Lite</button>
+        <button class="period-btn" id="erzFilter-nomaintouche" onclick="setErzFilter('nomaintouche')">Без касаний ИдаПроджект</button>
+        <button class="period-btn" id="erzFilter-nolitetouche" onclick="setErzFilter('nolitetouche')">Без касаний ИдаЛайт</button>
       </div>
       <div id="erzCountDisplay" style="font-size:11px;color:var(--muted);margin-top:8px"></div>
     </div>
@@ -323,12 +323,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
             <th>#</th>
             <th>Компания</th>
             <th>Регион</th>
-            <th>Main (сделок)</th>
-            <th>Main Won</th>
-            <th>Main Active</th>
-            <th>Main Lost</th>
-            <th>Последний Main</th>
-            <th>Lite (касаний)</th>
+            <th>ИдаПроджект</th>
+            <th>Выигр.</th>
+            <th>Актив.</th>
+            <th>Проигр.</th>
+            <th>Послед. касание</th>
+            <th>ИдаЛайт</th>
             <th>Sales статус</th>
             <th>Последний Sales контакт</th>
             <th>Бюджет</th>
@@ -1455,6 +1455,7 @@ const ERZ_STATUS_BADGE = {
   'Общались':        {color:'var(--accent2)',bg:'rgba(34,211,238,.12)'},
   'Бывший клиент':   {color:'var(--orange)',bg:'rgba(245,158,11,.12)'},
   'Нет касаний':     {color:'var(--muted)',bg:'rgba(139,143,163,.1)'},
+  'Первичное касание':{color:'var(--accent)',bg:'rgba(99,102,241,.12)'},
 };
 
 let erzCurrentFilter = 'top200';
@@ -1515,11 +1516,11 @@ function renderErzSummary(rows){
   const top200LiteN=top200.filter(r=>r.lite_touches>0).length;
   const cards=[
     {label:'Всего застройщиков',value:'2 881',color:'var(--text)'},
-    {label:'Касание Main',value:`${mainTouched} (${mainPct}%)`,color:'var(--accent)'},
-    {label:'Касание Lite',value:`${liteTouched} (${litePct}%)`,color:'var(--accent2)'},
+    {label:'ИдаПроджект',value:`${mainTouched} (${mainPct}%)`,color:'var(--accent)'},
+    {label:'ИдаЛайт касания',value:`${liteTouched} (${litePct}%)`,color:'var(--accent2)'},
     {label:'Касание любой',value:`${anyTouched} (${anyPct}%)`,color:'var(--green)'},
-    {label:'TOP-200 Main',value:`${top200MainN}/200`,color:'var(--orange)'},
-    {label:'TOP-200 Lite',value:`${top200LiteN}/200`,color:'var(--orange)'},
+    {label:'ТОП-200 ИдаПроджект',value:`${top200MainN}/200`,color:'var(--orange)'},
+    {label:'ТОП-200 ИдаЛайт',value:`${top200LiteN}/200`,color:'var(--orange)'},
   ];
   document.getElementById('erzSummaryCards').innerHTML=cards.map(c=>`
     <div class="kpi-card">
@@ -1557,7 +1558,7 @@ function renderErzTable(filtered){
       <td style="text-align:center;color:var(--red)">${r.main_lost||0}</td>
       <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastMain}</td>
       <td style="text-align:center">${r.lite_touches||0}</td>
-      <td>${erzStatusBadge(r.sales_status)}</td>
+      <td>${erzStatusBadge(r.sales_status||(hasAny?'Первичное касание':''))}</td>
       <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastSales}</td>
       <td style="white-space:nowrap">${budget}</td>
     </tr>`;
