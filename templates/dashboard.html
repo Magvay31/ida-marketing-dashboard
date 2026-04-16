@@ -319,6 +319,7 @@ function qp(){return '?project='+currentProject+(forceRefresh?'&refresh=1':'')}
 const MN = {'01':'Янв','02':'Фев','03':'Мар','04':'Апр','05':'Май','06':'Июн','07':'Июл','08':'Авг','09':'Сен','10':'Окт','11':'Ноя','12':'Дек'};
 function ml(k){const[y,m]=k.split('-');return MN[m]+"'"+y.slice(2)}
 function fR(n){if(n>=1e9)return(n/1e6).toFixed(0)+' млн';if(n>=1e6)return(n/1e6).toFixed(1)+' млн';if(n>=1e3)return(n/1e3).toFixed(0)+' тыс';return n+''}
+function fNum(n){return n.toLocaleString('ru-RU')}
 function sum(a){return a.reduce((s,v)=>s+v,0)}
 
 function getMonths(){
@@ -873,48 +874,71 @@ function renderYoY(){
   });
 
   // Delta indicators
+  const now=new Date(); const curMonth=String(now.getMonth()+1).padStart(2,'0');
   let deltaHtml='<div style="display:flex;gap:6px;flex-wrap:wrap">';
   mKeys.forEach(k=>{
+    if(k>curMonth) return;
     const l25=months[k].leads_2025;
     const l26=months[k].leads_2026;
     if(l25===0&&l26===0) return;
     const diff=l26-l25;
     const pct=l25>0?Math.round((diff/l25)*100):l26>0?100:0;
-    const isUp=diff>0;
     const arrow=diff>0?'&#9650;':diff<0?'&#9660;':'=';
-    const clr=diff>0?'var(--green)':diff<0?'var(--red)':'var(--muted)';
-    const bg=diff>0?'rgba(34,197,94,.1)':diff<0?'rgba(239,68,68,.1)':'rgba(139,143,163,.1)';
-    deltaHtml+=`<span style="font-size:10px;padding:3px 8px;border-radius:5px;background:${bg};color:${clr};font-weight:600">${MN[k]} ${arrow} ${pct>=0?'+':''}${pct}%</span>`;
+    const isCur=k===curMonth;
+    const clr=isCur?'var(--muted)':diff>0?'var(--green)':diff<0?'var(--red)':'var(--muted)';
+    const bg=isCur?'rgba(139,143,163,.07)':diff>0?'rgba(34,197,94,.1)':diff<0?'rgba(239,68,68,.1)':'rgba(139,143,163,.1)';
+    const note=isCur?' (в процессе)':'';
+    deltaHtml+=`<span style="font-size:10px;padding:3px 8px;border-radius:5px;background:${bg};color:${clr};font-weight:600;opacity:${isCur?.7:1}">${MN[k]} ${arrow} ${pct>=0?'+':''}${pct}%${note}</span>`;
   });
   deltaHtml+='</div>';
   document.getElementById('yoyDelta').innerHTML=deltaHtml;
 
-  // YoY table: won deals and budget comparison
-  let thtml='<table class="data-table"><thead><tr><th>Месяц</th><th>Выигр. 2025</th><th>Выигр. 2026</th><th>&#916;</th><th>Бюджет 2025</th><th>Бюджет 2026</th><th>&#916;</th></tr></thead><tbody>';
-  let totW25=0,totW26=0,totB25=0,totB26=0;
+  // YoY table: leads, won deals and budget comparison
+  let thtml='<table class="data-table"><thead><tr><th>Месяц</th><th>Лиды \'25</th><th>Лиды \'26</th><th>&#916;</th><th>Выигр. \'25</th><th>Выигр. \'26</th><th>&#916;</th><th>Бюджет \'25</th><th>Бюджет \'26</th><th>&#916;</th></tr></thead><tbody>';
+  let totL25=0,totL26=0,totW25=0,totW26=0,totB25=0,totB26=0;
   mKeys.forEach(k=>{
     const m=months[k];
-    if(m.won_2025===0&&m.won_2026===0&&m.budget_2025===0&&m.budget_2026===0) return;
+    if(m.leads_2025===0&&m.leads_2026===0&&m.won_2025===0&&m.won_2026===0&&m.budget_2025===0&&m.budget_2026===0) return;
+    const isFuture=k>curMonth;
+    const isCur=k===curMonth;
+    const lDiff=m.leads_2026-m.leads_2025;
     const wDiff=m.won_2026-m.won_2025;
     const bDiff=m.budget_2026-m.budget_2025;
+    totL25+=m.leads_2025;totL26+=m.leads_2026;
     totW25+=m.won_2025;totW26+=m.won_2026;totB25+=m.budget_2025;totB26+=m.budget_2026;
-    thtml+=`<tr>
-      <td><b>${MN[k]}</b></td>
-      <td>${m.won_2025}</td>
-      <td style="color:var(--green)">${m.won_2026}</td>
-      <td style="color:${wDiff>0?'var(--green)':wDiff<0?'var(--red)':'var(--muted)'}"><b>${wDiff>0?'+':''}${wDiff}</b></td>
+    const deltaStyle=(diff,isFut)=>{
+      if(isFut) return 'color:var(--muted)';
+      return `color:${diff>0?'var(--green)':diff<0?'var(--red)':'var(--muted)'}`;
+    };
+    const deltaCell=(diff,fmt,isFut)=>{
+      if(isFut) return '<td style="color:var(--muted)">—</td>';
+      const s=deltaStyle(diff,false);
+      return `<td style="${s}"><b>${diff>0?'+':''}${fmt(diff)}</b></td>`;
+    };
+    thtml+=`<tr${isCur?' style="opacity:.8"':''}>
+      <td><b>${MN[k]}</b>${isCur?'<span style="font-size:9px;color:var(--muted);margin-left:4px">▶</span>':''}</td>
+      <td>${fNum(m.leads_2025)}</td>
+      <td style="color:var(--green)">${fNum(m.leads_2026)}</td>
+      ${deltaCell(lDiff,fNum,isFuture)}
+      <td>${fNum(m.won_2025)}</td>
+      <td style="color:var(--green)">${fNum(m.won_2026)}</td>
+      ${deltaCell(wDiff,fNum,isFuture)}
       <td>${fR(m.budget_2025)}₽</td>
       <td style="color:var(--green)">${fR(m.budget_2026)}₽</td>
-      <td style="color:${bDiff>0?'var(--green)':bDiff<0?'var(--red)':'var(--muted)'}">${bDiff>0?'+':''}${fR(bDiff)}₽</td>
+      ${deltaCell(bDiff,v=>fR(v)+'₽',isFuture)}
     </tr>`;
   });
+  const tlDiff=totL26-totL25;
   const twDiff=totW26-totW25;
   const tbDiff=totB26-totB25;
   thtml+=`<tr style="border-top:2px solid var(--border);font-weight:700">
     <td>ИТОГО</td>
-    <td>${totW25}</td>
-    <td style="color:var(--green)">${totW26}</td>
-    <td style="color:${twDiff>0?'var(--green)':twDiff<0?'var(--red)':'var(--muted)'}">${twDiff>0?'+':''}${twDiff}</td>
+    <td>${fNum(totL25)}</td>
+    <td style="color:var(--green)">${fNum(totL26)}</td>
+    <td style="color:${tlDiff>0?'var(--green)':tlDiff<0?'var(--red)':'var(--muted)'}">${tlDiff>0?'+':''}${fNum(tlDiff)}</td>
+    <td>${fNum(totW25)}</td>
+    <td style="color:var(--green)">${fNum(totW26)}</td>
+    <td style="color:${twDiff>0?'var(--green)':twDiff<0?'var(--red)':'var(--muted)'}">${twDiff>0?'+':''}${fNum(twDiff)}</td>
     <td>${fR(totB25)}₽</td>
     <td style="color:var(--green)">${fR(totB26)}₽</td>
     <td style="color:${tbDiff>0?'var(--green)':tbDiff<0?'var(--red)':'var(--muted)'}">${tbDiff>0?'+':''}${fR(tbDiff)}₽</td>

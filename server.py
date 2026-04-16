@@ -789,16 +789,24 @@ def api_amo_yoy():
             mk = f'{created.month:02d}'
             months[mk]['leads_2025'] += 1
             if lead.get('status_id') in won_statuses:
-                months[mk]['won_2025'] += 1
-                months[mk]['budget_2025'] += (lead.get('price', 0) or 0)
+                closed_ts = lead.get('closed_at') or lead['created_at']
+                closed = datetime.fromtimestamp(closed_ts)
+                if closed.year == 2025:
+                    wmk = f'{closed.month:02d}'
+                    months[wmk]['won_2025'] += 1
+                    months[wmk]['budget_2025'] += (lead.get('price', 0) or 0)
 
         for lead in leads_2026:
             created = datetime.fromtimestamp(lead['created_at'])
             mk = f'{created.month:02d}'
             months[mk]['leads_2026'] += 1
             if lead.get('status_id') in won_statuses:
-                months[mk]['won_2026'] += 1
-                months[mk]['budget_2026'] += (lead.get('price', 0) or 0)
+                closed_ts = lead.get('closed_at') or lead['created_at']
+                closed = datetime.fromtimestamp(closed_ts)
+                if closed.year == 2026:
+                    wmk = f'{closed.month:02d}'
+                    months[wmk]['won_2026'] += 1
+                    months[wmk]['budget_2026'] += (lead.get('price', 0) or 0)
 
         result = {'months': months}
         cache_set(project, 'yoy', result)
