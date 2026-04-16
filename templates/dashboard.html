@@ -1529,6 +1529,105 @@ function renderErzSummary(rows){
     </div>`).join('');
 }
 
+function toggleErzDetail(rank){
+  const el=document.getElementById('erz-detail-'+rank);
+  const arrow=document.getElementById('erz-arrow-'+rank);
+  if(!el) return;
+  const open=el.style.display==='none';
+  el.style.display=open?'table-row':'none';
+  if(arrow) arrow.textContent=open?'▼':'▶';
+}
+
+async function updateErzField(rank, field, value){
+  // Update local cache
+  const row=erzData&&erzData.find(r=>r.rank===rank);
+  if(row) row[field]=value;
+
+  // Save to server
+  try{
+    await fetch('/api/erz/update',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({rank, updates:{[field]:value}})
+    });
+  }catch(e){ console.error('Save failed:',e); }
+
+  // Re-render table to update status badge in main row
+  if(field==='sales_status'){
+    renderErzTable(erzFilterRows(erzData, erzCurrentFilter));
+  }
+}
+
+function buildErzDetail(r){
+  const hasDeals=r.deals&&r.deals.length>0;
+  let html=`<div style="padding:12px 16px;background:var(--bg);border-top:1px solid var(--border)">`;
+
+  if(hasDeals){
+    const statusColor={
+      'Успешно':'var(--green)',
+      'Проиграно':'var(--red)',
+    };
+    html+=`<div style="margin-bottom:10px">
+      <b style="font-size:11px;color:var(--muted)">Сделки ИдаПроджект:</b>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
+        <thead>
+          <tr style="color:var(--muted);border-bottom:1px solid var(--border)">
+            <th style="text-align:left;padding:3px 6px;font-weight:500">Сделка</th>
+            <th style="text-align:left;padding:3px 6px;font-weight:500">Статус</th>
+            <th style="text-align:right;padding:3px 6px;font-weight:500">Бюджет</th>
+            <th style="text-align:center;padding:3px 6px;font-weight:500">Создана</th>
+            <th style="text-align:center;padding:3px 6px;font-weight:500">Закрыта</th>
+            <th style="text-align:left;padding:3px 6px;font-weight:500">Комментарий</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${r.deals.map(d=>{
+            const sc=statusColor[d.s]||(d.s?'var(--accent)':'var(--muted)');
+            const price=d.p&&d.p>0?fR(d.p)+' ₽':'—';
+            return `<tr style="border-bottom:1px solid rgba(139,143,163,.1)">
+              <td style="padding:4px 6px">${d.n||'—'}</td>
+              <td style="padding:4px 6px"><span style="color:${sc};font-weight:600">${d.s||'—'}</span></td>
+              <td style="padding:4px 6px;text-align:right">${price}</td>
+              <td style="padding:4px 6px;text-align:center;color:var(--muted)">${erzFmtDate(d.d)||'—'}</td>
+              <td style="padding:4px 6px;text-align:center;color:var(--muted)">${erzFmtDate(d.c)||'—'}</td>
+              <td style="padding:4px 6px;color:var(--muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(d.cm||'').replace(/"/g,'&quot;')}">${d.cm||'—'}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  if(r.sales_summary){
+    html+=`<div style="margin-bottom:10px;font-size:11px;color:var(--muted)">${r.sales_summary}</div>`;
+  }
+
+  // Editable fields
+  const statusOptions=['','Текущий клиент','Общались','Бывший клиент','Нет касаний','Первичное касание'];
+  const selOpts=statusOptions.map(v=>`<option value="${v}"${(r.sales_status||''===v&&v==='')||(r.sales_status===v&&v!=='')?'selected':''}>${v||'—'}</option>`).join('');
+  const commentVal=(r.sales_comment||'').replace(/"/g,'&quot;');
+  const lprVal=(r.sales_has_lpr||'').replace(/"/g,'&quot;');
+
+  html+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;align-items:center;flex-wrap:wrap;gap:8px">
+    <b style="font-size:11px">Статус:</b>
+    <select onchange="updateErzField(${r.rank},'sales_status',this.value)"
+            style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11px">
+      ${selOpts}
+    </select>
+    <b style="font-size:11px">Комментарий:</b>
+    <input type="text" value="${commentVal}"
+           onblur="updateErzField(${r.rank},'sales_comment',this.value)"
+           style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11px;width:300px">
+    <b style="font-size:11px">ЛПР:</b>
+    <input type="text" value="${lprVal}"
+           onblur="updateErzField(${r.rank},'sales_has_lpr',this.value)"
+           style="background:var(--card);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:4px 8px;font-size:11px;width:100px">
+  </div>`;
+
+  html+=`</div>`;
+  return html;
+}
+
 function renderErzTable(filtered){
   const COLS=12;
   if(!filtered||filtered.length===0){
@@ -1537,8 +1636,11 @@ function renderErzTable(filtered){
     return;
   }
   document.getElementById('erzCountDisplay').textContent=`Показано ${filtered.length} из ${erzData?erzData.length:filtered.length}`;
-  document.getElementById('erzTableBody').innerHTML=filtered.map((r)=>{
+  const rows=[];
+  filtered.forEach((r)=>{
     const hasAny=(r.main_deals>0)||(r.lite_touches>0);
+    const hasDeals=r.deals&&r.deals.length>0;
+    const clickable=hasAny||hasDeals;
     const dim=!hasAny?'opacity:.45':'';
     let borderStyle='';
     if(r.main_won>0) borderStyle='border-left:3px solid var(--green)';
@@ -1548,8 +1650,12 @@ function renderErzTable(filtered){
     const budget=(r.sales_budget&&r.sales_budget>0)?fR(r.sales_budget)+' ₽':'—';
     const company=r.company||'—';
     const region=r.region||'—';
-    return `<tr style="${dim};${borderStyle}">
-      <td style="color:var(--muted);font-size:10px">${r.rank}</td>
+    const arrow=clickable?`<span id="erz-arrow-${r.rank}" style="font-size:9px;color:var(--muted);margin-right:4px">▶</span>`:'';
+    const cursorStyle=clickable?'cursor:pointer':'';
+    const clickAttr=clickable?`onclick="toggleErzDetail(${r.rank})"` :'';
+
+    rows.push(`<tr style="${dim};${borderStyle};${cursorStyle}" ${clickAttr}>
+      <td style="color:var(--muted);font-size:10px">${arrow}${r.rank}</td>
       <td style="font-weight:600;max-width:200px">${company}</td>
       <td style="color:var(--muted);font-size:10px;max-width:120px">${region}</td>
       <td style="text-align:center">${r.main_deals||0}</td>
@@ -1561,8 +1667,15 @@ function renderErzTable(filtered){
       <td>${erzStatusBadge(r.sales_status||(hasAny?'Первичное касание':''))}</td>
       <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastSales}</td>
       <td style="white-space:nowrap">${budget}</td>
-    </tr>`;
-  }).join('');
+    </tr>`);
+
+    if(clickable){
+      rows.push(`<tr class="erz-detail" id="erz-detail-${r.rank}" style="display:none">
+        <td colspan="${COLS}" style="padding:0">${buildErzDetail(r)}</td>
+      </tr>`);
+    }
+  });
+  document.getElementById('erzTableBody').innerHTML=rows.join('');
 }
 
 async function fetchAndRenderErz(){

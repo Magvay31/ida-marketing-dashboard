@@ -1027,6 +1027,33 @@ def api_erz_data():
     return jsonify({'ok': False, 'error': 'No data file'})
 
 
+@app.route('/api/erz/update', methods=['POST'])
+def api_erz_update():
+    """Update a company's fields in erz_full.json"""
+    data_file = os.path.join(os.path.dirname(__file__), 'data', 'erz_full.json')
+    try:
+        req = request.get_json()
+        rank = req.get('rank')
+        updates = req.get('updates', {})  # e.g. {"sales_status": "Общались", "sales_comment": "..."}
+
+        with open(data_file) as f:
+            erz_data = json.load(f)
+
+        for row in erz_data:
+            if row['rank'] == rank:
+                for key, value in updates.items():
+                    if key in ('sales_status', 'sales_comment', 'sales_has_lpr', 'sales_last_contact'):
+                        row[key] = value
+                break
+
+        with open(data_file, 'w') as f:
+            json.dump(erz_data, f, ensure_ascii=False)
+
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/status')
 def api_status():
     project = get_project()
