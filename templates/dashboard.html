@@ -151,6 +151,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
     <div class="period-selector" id="projectTabs">
       <button class="period-btn active" onclick="setProject('main')">ИдаПроджект</button>
       <button class="period-btn" onclick="setProject('lite')">ИдаЛайт</button>
+      <button class="period-btn" onclick="setView('erz')">ЕРЗ ТОП-100</button>
     </div>
   </div>
   <div class="header-right">
@@ -299,6 +300,39 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   <div class="updated-at" id="updatedAt"></div>
 </div>
 
+<!-- ERZ TOP-100 SECTION -->
+<div id="erzSection" style="display:none;padding:20px 28px">
+  <div id="erzSummaryCards" style="display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px"></div>
+  <div class="chart-card" style="padding:0;overflow:hidden">
+    <div style="padding:16px 18px 12px;border-bottom:1px solid var(--border)">
+      <h3>ЕРЗ ТОП-100 — Статус работы с застройщиками</h3>
+      <div class="sub">Отсортировано по дате последнего контакта (сначала свежие); Нет касаний — в конце</div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="data-table" id="erzTable" style="min-width:1100px">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Компания</th>
+            <th>м²</th>
+            <th>Рейтинг ЕРЗ</th>
+            <th>Статус</th>
+            <th>Сделок</th>
+            <th>Акт.</th>
+            <th>Реализ.</th>
+            <th>Первый контакт</th>
+            <th>Последний контакт</th>
+            <th>Сводка</th>
+            <th>Бюджет</th>
+            <th>ЛПР</th>
+          </tr>
+        </thead>
+        <tbody id="erzTableBody"><tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // STATE
@@ -314,6 +348,8 @@ let charts = {};
 let currentProject = 'main';
 const PROJECT_NAMES = {main:'ИдаПроджект',lite:'ИдаЛайт'};
 let forceRefresh = false;
+let currentView = 'dashboard'; // 'dashboard' or 'erz'
+let erzData = null; // cache ERZ data after first fetch
 function qp(){return '?project='+currentProject+(forceRefresh?'&refresh=1':'')}
 
 const MN = {'01':'Янв','02':'Фев','03':'Мар','04':'Апр','05':'Май','06':'Июн','07':'Июл','08':'Авг','09':'Сен','10':'Окт','11':'Ноя','12':'Дек'};
@@ -1376,8 +1412,130 @@ function renderAll(){
   try{ renderMonthlyTable() }catch(e){console.error('renderMonthlyTable:',e)}
 }
 
+// ============================================================
+// ERZ TOP-100
+// ============================================================
+const ERZ_STATUS_BADGE = {
+  'Текущий клиент': {color:'var(--green)',bg:'rgba(34,197,94,.12)'},
+  'Общались':        {color:'var(--accent2)',bg:'rgba(34,211,238,.12)'},
+  'Бывший клиент':   {color:'var(--orange)',bg:'rgba(245,158,11,.12)'},
+  'Нет касаний':     {color:'var(--muted)',bg:'rgba(139,143,163,.1)'},
+};
+
+function erzStatusBadge(status){
+  const s=ERZ_STATUS_BADGE[status]||{color:'var(--muted)',bg:'rgba(139,143,163,.1)'};
+  return `<span style="padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;color:${s.color};background:${s.bg}">${status||'—'}</span>`;
+}
+
+function erzParseDate(str){
+  if(!str) return null;
+  const [d,m,y]=str.split('.');
+  if(!d||!m||!y) return null;
+  return new Date(+y,+m-1,+d);
+}
+
+function erzSortRows(rows){
+  const noContact=rows.filter(r=>r.status==='Нет касаний');
+  const hasContact=rows.filter(r=>r.status!=='Нет касаний');
+  hasContact.sort((a,b)=>{
+    const da=erzParseDate(a.last_contact), db=erzParseDate(b.last_contact);
+    if(da&&db) return db-da;
+    if(da) return -1;
+    if(db) return 1;
+    return 0;
+  });
+  return [...hasContact,...noContact];
+}
+
+function renderErzSummary(rows){
+  const total=rows.length;
+  const curr=rows.filter(r=>r.status==='Текущий клиент').length;
+  const talked=rows.filter(r=>r.status==='Общались').length;
+  const none=rows.filter(r=>r.status==='Нет касаний').length;
+  const lpr=rows.filter(r=>r.has_lpr&&r.has_lpr!=='').length;
+  const budgetSum=rows.reduce((s,r)=>s+(r.budget||0),0);
+  const cards=[
+    {label:'Всего компаний',value:total,color:'var(--text)'},
+    {label:'Текущие клиенты',value:curr,color:'var(--green)'},
+    {label:'Общались',value:talked,color:'var(--accent2)'},
+    {label:'Нет касаний',value:none,color:'var(--muted)'},
+    {label:'Есть ЛПР',value:lpr,color:'var(--accent)'},
+    {label:'Бюджет реализ.',value:fR(budgetSum),color:'var(--orange)',raw:true},
+  ];
+  document.getElementById('erzSummaryCards').innerHTML=cards.map(c=>`
+    <div class="kpi-card">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value" style="font-size:20px;color:${c.color}">${c.raw?c.value:c.value}</div>
+    </div>`).join('');
+}
+
+function renderErzTable(rows){
+  const sorted=erzSortRows(rows);
+  document.getElementById('erzTableBody').innerHTML=sorted.map((r,i)=>{
+    const dim=r.status==='Нет касаний'?'opacity:.5':'';
+    const highlight=r.status==='Текущий клиент'?'background:rgba(34,197,94,.03)':'';
+    const summary=r.deal_summary||'';
+    const summaryShort=summary.length>50?summary.slice(0,50)+'…':summary;
+    const summaryTip=summary.length>50?`title="${summary.replace(/"/g,'&quot;')}"`:'' ;
+    const sqm=r.sqm?fNum(r.sqm):'—';
+    const budget=r.budget?fNum(r.budget)+' ₽':'—';
+    return `<tr style="${dim};${highlight}">
+      <td style="color:var(--muted);font-size:10px">${r.rank}</td>
+      <td style="font-weight:600;max-width:200px">${r.company||'—'}</td>
+      <td style="color:var(--muted)">${sqm}</td>
+      <td style="text-align:center">${r.erz_rating||'—'}</td>
+      <td>${erzStatusBadge(r.status)}</td>
+      <td style="text-align:center">${r.deals||0}</td>
+      <td style="text-align:center">${r.active||0}</td>
+      <td style="text-align:center">${r.realized||0}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${r.first_contact||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${r.last_contact||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;max-width:160px" ${summaryTip}>${summaryShort||'—'}</td>
+      <td style="white-space:nowrap">${budget}</td>
+      <td style="text-align:center;font-size:10px">${r.has_lpr||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function fetchAndRenderErz(){
+  if(!erzData){
+    document.getElementById('erzTableBody').innerHTML='<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr>';
+    try{
+      const res=await fetch('/api/erz/data');
+      const json=await res.json();
+      if(json.ok) erzData=json.data;
+      else{ document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="13" style="text-align:center;color:var(--red);padding:24px">${json.error||'Ошибка'}</td></tr>`; return; }
+    }catch(e){
+      document.getElementById('erzTableBody').innerHTML=`<tr><td colspan="13" style="text-align:center;color:var(--red);padding:24px">Ошибка загрузки</td></tr>`;
+      return;
+    }
+  }
+  renderErzSummary(erzData);
+  renderErzTable(erzData);
+}
+
+function setView(v){
+  currentView=v;
+  const mainDiv=document.querySelector('div.main');
+  const erzDiv=document.getElementById('erzSection');
+  document.querySelectorAll('#projectTabs .period-btn').forEach(b=>{
+    b.classList.toggle('active', b.textContent==='ЕРЗ ТОП-100'&&v==='erz');
+  });
+  if(v==='erz'){
+    mainDiv.style.display='none';
+    erzDiv.style.display='block';
+    fetchAndRenderErz();
+  } else {
+    mainDiv.style.display='';
+    erzDiv.style.display='none';
+  }
+}
+
 async function setProject(p){
   currentProject=p;
+  currentView='dashboard';
+  document.querySelector('div.main').style.display='';
+  document.getElementById('erzSection').style.display='none';
   document.querySelectorAll('#projectTabs .period-btn').forEach(b=>{
     b.classList.toggle('active',
       (p==='main'&&b.textContent==='ИдаПроджект')||(p==='lite'&&b.textContent==='ИдаЛайт'));

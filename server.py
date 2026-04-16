@@ -981,6 +981,15 @@ def api_amo_funnel():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+@app.route('/api/erz/data')
+def api_erz_data():
+    data_file = os.path.join(os.path.dirname(__file__), 'data', 'erz_top100.json')
+    if os.path.exists(data_file):
+        with open(data_file) as f:
+            return jsonify({'ok': True, 'data': json.load(f)})
+    return jsonify({'ok': False, 'error': 'No data file'})
+
+
 @app.route('/api/status')
 def api_status():
     project = get_project()
