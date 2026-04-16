@@ -1018,36 +1018,74 @@ def api_amo_funnel():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
+# ============================================================
+# ERZ PERSISTENCE: base data + manual edits merged at read time
+# ============================================================
+ERZ_BASE_FILE = os.path.join(os.path.dirname(__file__), 'data', 'erz_full.json')
+ERZ_EDITS_DIR = os.environ.get('ERZ_PERSIST_DIR', os.path.join(os.path.dirname(__file__), 'data'))
+ERZ_EDITS_FILE = os.path.join(ERZ_EDITS_DIR, 'erz_edits.json')
+EDITABLE_FIELDS = ('sales_status', 'sales_comment', 'sales_has_lpr', 'sales_last_contact', 'sales_summary')
+
+def _load_erz_edits():
+    """Load manual edits {rank -> {field: value}}"""
+    if os.path.exists(ERZ_EDITS_FILE):
+        try:
+            with open(ERZ_EDITS_FILE) as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_erz_edits(edits):
+    """Save manual edits to persistent file"""
+    os.makedirs(os.path.dirname(ERZ_EDITS_FILE), exist_ok=True)
+    with open(ERZ_EDITS_FILE, 'w') as f:
+        json.dump(edits, f, ensure_ascii=False)
+
+def _merge_erz_data():
+    """Merge base ERZ data with manual edits"""
+    if not os.path.exists(ERZ_BASE_FILE):
+        return None
+    with open(ERZ_BASE_FILE) as f:
+        base = json.load(f)
+    edits = _load_erz_edits()
+    if not edits:
+        return base
+    for row in base:
+        rank_key = str(row['rank'])
+        if rank_key in edits:
+            for field, value in edits[rank_key].items():
+                row[field] = value
+    return base
+
+
 @app.route('/api/erz/data')
 def api_erz_data():
-    data_file = os.path.join(os.path.dirname(__file__), 'data', 'erz_full.json')
-    if os.path.exists(data_file):
-        with open(data_file) as f:
-            return jsonify({'ok': True, 'data': json.load(f)})
+    data = _merge_erz_data()
+    if data is not None:
+        return jsonify({'ok': True, 'data': data})
     return jsonify({'ok': False, 'error': 'No data file'})
 
 
 @app.route('/api/erz/update', methods=['POST'])
 def api_erz_update():
-    """Update a company's fields in erz_full.json"""
-    data_file = os.path.join(os.path.dirname(__file__), 'data', 'erz_full.json')
+    """Save manual edit for a company (persists separately from base data)"""
     try:
         req = request.get_json()
         rank = req.get('rank')
-        updates = req.get('updates', {})  # e.g. {"sales_status": "Общались", "sales_comment": "..."}
+        updates = req.get('updates', {})
 
-        with open(data_file) as f:
-            erz_data = json.load(f)
+        # Only allow editable fields
+        clean_updates = {k: v for k, v in updates.items() if k in EDITABLE_FIELDS}
+        if not clean_updates:
+            return jsonify({'ok': False, 'error': 'No valid fields'})
 
-        for row in erz_data:
-            if row['rank'] == rank:
-                for key, value in updates.items():
-                    if key in ('sales_status', 'sales_comment', 'sales_has_lpr', 'sales_last_contact'):
-                        row[key] = value
-                break
-
-        with open(data_file, 'w') as f:
-            json.dump(erz_data, f, ensure_ascii=False)
+        edits = _load_erz_edits()
+        rank_key = str(rank)
+        if rank_key not in edits:
+            edits[rank_key] = {}
+        edits[rank_key].update(clean_updates)
+        _save_erz_edits(edits)
 
         return jsonify({'ok': True})
     except Exception as e:

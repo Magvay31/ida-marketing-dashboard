@@ -320,18 +320,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <table class="data-table" id="erzTable" style="min-width:1200px">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Компания</th>
-            <th>Регион</th>
-            <th>ИдаПроджект</th>
-            <th>Выигр.</th>
-            <th>Актив.</th>
-            <th>Проигр.</th>
-            <th>Послед. касание</th>
-            <th>ИдаЛайт</th>
-            <th>Sales статус</th>
-            <th>Последний Sales контакт</th>
-            <th>Бюджет</th>
+            <th rowspan="2" style="vertical-align:bottom">#</th>
+            <th rowspan="2" style="vertical-align:bottom">Компания</th>
+            <th rowspan="2" style="vertical-align:bottom">Регион</th>
+            <th colspan="5" style="text-align:center;background:rgba(99,102,241,.08);color:var(--accent);border-bottom:2px solid var(--accent)">ИдаПроджект (кастом)</th>
+            <th colspan="2" style="text-align:center;background:rgba(34,211,238,.08);color:var(--accent2);border-bottom:2px solid var(--accent2)">ИдаЛайт (SaaS)</th>
+            <th rowspan="2" style="vertical-align:bottom">Статус</th>
+            <th rowspan="2" style="vertical-align:bottom">Бюджет</th>
+          </tr>
+          <tr>
+            <th style="background:rgba(99,102,241,.04)">Сделок</th>
+            <th style="background:rgba(99,102,241,.04)">Win</th>
+            <th style="background:rgba(99,102,241,.04)">Акт.</th>
+            <th style="background:rgba(99,102,241,.04)">Lost</th>
+            <th style="background:rgba(99,102,241,.04)">Дата</th>
+            <th style="background:rgba(34,211,238,.04)">Касаний</th>
+            <th style="background:rgba(34,211,238,.04)">Дата</th>
           </tr>
         </thead>
         <tbody id="erzTableBody"><tr><td colspan="12" style="text-align:center;color:var(--muted);padding:24px">Загрузка...</td></tr></tbody>
@@ -1488,7 +1492,7 @@ function erzFilterRows(rows, filter){
   switch(filter){
     case 'top200': return rows.filter(r=>r.rank<=200);
     case 'top100': return rows.filter(r=>r.rank<=100);
-    case 'touched': return rows.filter(r=>(r.main_deals>0)||(r.lite_touches>0));
+    case 'touched': return rows.filter(r=>(r.main_deals>0)||(r.lite_deals>0));
     case 'nomaintouche': return rows.filter(r=>!r.main_deals||r.main_deals===0);
     case 'nolitetouche': return rows.filter(r=>!r.lite_touches||r.lite_touches===0);
     default: return rows; // 'all'
@@ -1506,16 +1510,16 @@ function setErzFilter(filter){
 function renderErzSummary(rows){
   const total=rows.length;
   const mainTouched=rows.filter(r=>r.main_deals>0).length;
-  const liteTouched=rows.filter(r=>r.lite_touches>0).length;
-  const anyTouched=rows.filter(r=>(r.main_deals>0)||(r.lite_touches>0)).length;
+  const liteTouched=rows.filter(r=>r.lite_deals>0).length;
+  const anyTouched=rows.filter(r=>(r.main_deals>0)||(r.lite_deals>0)).length;
   const mainPct=total>0?Math.round(mainTouched/total*100):0;
   const litePct=total>0?Math.round(liteTouched/total*100):0;
   const anyPct=total>0?Math.round(anyTouched/total*100):0;
   const top200=rows.filter(r=>r.rank<=200);
   const below200=rows.filter(r=>r.rank>200);
   const top200MainN=top200.filter(r=>r.main_deals>0).length;
-  const top200LiteN=top200.filter(r=>r.lite_touches>0).length;
-  const below200LiteN=below200.filter(r=>r.lite_touches>0).length;
+  const top200LiteN=top200.filter(r=>r.lite_deals>0).length;
+  const below200LiteN=below200.filter(r=>r.lite_deals>0).length;
   const below200Pct=below200.length>0?Math.round(below200LiteN/below200.length*100):0;
   const cards=[
     {label:'Всего ЕРЗ',value:`${total.toLocaleString('ru-RU')}`,color:'var(--text)'},
@@ -1601,6 +1605,34 @@ function buildErzDetail(r){
     </div>`;
   }
 
+  // Lite deals
+  const hasLite=r.lite&&r.lite.length>0;
+  if(hasLite){
+    const statusColor={'Успешно':'var(--green)','Проиграно':'var(--red)'};
+    html+=`<div style="margin-bottom:10px">
+      <b style="font-size:11px;color:var(--accent2)">Сделки ИдаЛайт (${r.lite.length}):</b>
+      <table style="width:100%;border-collapse:collapse;margin-top:6px;font-size:11px">
+        <thead><tr style="color:var(--muted);border-bottom:1px solid var(--border)">
+          <th style="text-align:left;padding:3px 6px;font-weight:500">Сделка</th>
+          <th style="text-align:left;padding:3px 6px;font-weight:500">Статус</th>
+          <th style="text-align:right;padding:3px 6px;font-weight:500">Бюджет</th>
+          <th style="text-align:center;padding:3px 6px;font-weight:500">Создана</th>
+          <th style="text-align:center;padding:3px 6px;font-weight:500">Закрыта</th>
+        </tr></thead><tbody>
+        ${r.lite.map(d=>{
+          const sc=statusColor[d.s]||(d.s?'var(--accent2)':'var(--muted)');
+          const price=d.p&&d.p>0?fR(d.p)+' ₽':'—';
+          return `<tr style="border-bottom:1px solid rgba(139,143,163,.1)">
+            <td style="padding:4px 6px">${d.n||'—'}</td>
+            <td style="padding:4px 6px"><span style="color:${sc};font-weight:600">${d.s||'—'}</span></td>
+            <td style="padding:4px 6px;text-align:right">${price}</td>
+            <td style="padding:4px 6px;text-align:center;color:var(--muted)">${erzFmtDate(d.d)||'—'}</td>
+            <td style="padding:4px 6px;text-align:center;color:var(--muted)">${erzFmtDate(d.c)||'—'}</td>
+          </tr>`;
+        }).join('')}
+        </tbody></table></div>`;
+  }
+
   if(r.sales_summary){
     html+=`<div style="margin-bottom:10px;font-size:11px;color:var(--muted)">${r.sales_summary}</div>`;
   }
@@ -1641,8 +1673,8 @@ function renderErzTable(filtered){
   document.getElementById('erzCountDisplay').textContent=`Показано ${filtered.length} из ${erzData?erzData.length:filtered.length}`;
   const rows=[];
   filtered.forEach((r)=>{
-    const hasAny=(r.main_deals>0)||(r.lite_touches>0);
-    const hasDeals=r.deals&&r.deals.length>0;
+    const hasAny=(r.main_deals>0)||(r.lite_deals>0);
+    const hasDeals=(r.deals&&r.deals.length>0)||(r.lite&&r.lite.length>0);
     const clickable=hasAny||hasDeals;
     const dim=!hasAny?'opacity:.45':'';
     let borderStyle='';
@@ -1657,18 +1689,21 @@ function renderErzTable(filtered){
     const cursorStyle=clickable?'cursor:pointer':'';
     const clickAttr=clickable?`onclick="toggleErzDetail(${r.rank})"` :'';
 
+    const liteLast=erzFmtDate(r.sales_last_contact||r.main_last);
+    const hasRealDeals=r.deals&&r.deals.length>0;
+    const statusText=r.sales_status||(hasRealDeals?'Первичное касание':'');
     rows.push(`<tr style="${dim};${borderStyle};${cursorStyle}" ${clickAttr}>
       <td style="color:var(--muted);font-size:10px">${arrow}${r.rank}</td>
       <td style="font-weight:600;max-width:200px">${company}</td>
       <td style="color:var(--muted);font-size:10px;max-width:120px">${region}</td>
-      <td style="text-align:center">${r.main_deals||0}</td>
-      <td style="text-align:center;color:var(--green)">${r.main_won||0}</td>
-      <td style="text-align:center;color:var(--accent)">${r.main_active||0}</td>
-      <td style="text-align:center;color:var(--red)">${r.main_lost||0}</td>
-      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastMain}</td>
-      <td style="text-align:center">${r.lite_touches||0}</td>
-      <td>${erzStatusBadge(r.sales_status||(hasAny?'Первичное касание':''))}</td>
-      <td style="color:var(--muted);font-size:10px;white-space:nowrap">${lastSales}</td>
+      <td style="text-align:center;background:rgba(99,102,241,.02)">${r.main_deals||'—'}</td>
+      <td style="text-align:center;color:var(--green);background:rgba(99,102,241,.02)">${r.main_won||'—'}</td>
+      <td style="text-align:center;color:var(--accent);background:rgba(99,102,241,.02)">${r.main_active||'—'}</td>
+      <td style="text-align:center;color:var(--red);background:rgba(99,102,241,.02)">${r.main_lost||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap;background:rgba(99,102,241,.02)">${lastMain}</td>
+      <td style="text-align:center;background:rgba(34,211,238,.02)">${r.lite_deals||'—'}</td>
+      <td style="color:var(--muted);font-size:10px;white-space:nowrap;background:rgba(34,211,238,.02)">${erzFmtDate(r.lite_last)||'—'}</td>
+      <td>${erzStatusBadge(statusText)}</td>
       <td style="white-space:nowrap">${budget}</td>
     </tr>`);
 
