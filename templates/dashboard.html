@@ -311,6 +311,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
         <button class="period-btn active" id="erzFilter-top200" onclick="setErzFilter('top200')">ТОП-200</button>
         <button class="period-btn" id="erzFilter-top100" onclick="setErzFilter('top100')">ТОП-100</button>
         <button class="period-btn" id="erzFilter-touched" onclick="setErzFilter('touched')">С касаниями</button>
+        <button class="period-btn" id="erzFilter-clients" onclick="setErzFilter('clients')">Текущие клиенты</button>
+        <button class="period-btn" id="erzFilter-nonerz" onclick="setErzFilter('nonerz')">Не в ЕРЗ</button>
         <button class="period-btn" id="erzFilter-nomaintouche" onclick="setErzFilter('nomaintouche')">Без касаний ИдаПроджект</button>
         <button class="period-btn" id="erzFilter-nolitetouche" onclick="setErzFilter('nolitetouche')">Без касаний ИдаЛайт</button>
       </div>
@@ -1491,11 +1493,13 @@ function erzFmtDate(str){
 
 function erzFilterRows(rows, filter){
   switch(filter){
-    case 'top200': return rows.filter(r=>r.rank<=200);
-    case 'top100': return rows.filter(r=>r.rank<=100);
+    case 'top200': return rows.filter(r=>r.rank>0&&r.rank<=200);
+    case 'top100': return rows.filter(r=>r.rank>0&&r.rank<=100);
     case 'touched': return rows.filter(r=>(r.main_deals>0)||(r.lite_deals>0));
-    case 'nomaintouche': return rows.filter(r=>!r.main_deals||r.main_deals===0);
-    case 'nolitetouche': return rows.filter(r=>!r.lite_touches||r.lite_touches===0);
+    case 'clients': return rows.filter(r=>r.sales_status&&r.sales_status.includes('Текущий клиент'));
+    case 'nonerz': return rows.filter(r=>r.rank===0);
+    case 'nomaintouche': return rows.filter(r=>r.rank>0&&(!r.main_deals||r.main_deals===0));
+    case 'nolitetouche': return rows.filter(r=>r.rank>0&&(!r.lite_deals||r.lite_deals===0));
     default: return rows; // 'all'
   }
 }
