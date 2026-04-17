@@ -9,6 +9,7 @@ import time
 import os
 import csv
 import io
+import threading
 import requests
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -17,26 +18,115 @@ from flask import Flask, render_template, jsonify, request
 app = Flask(__name__)
 
 # ============================================================
-# CACHE (in-memory, per project+endpoint, TTL 3 hours)
+# CACHE (in-memory + file-backed, per project+endpoint, TTL 12 hours)
 # ============================================================
 CACHE = {}  # key: (project, endpoint) -> {'data': ..., 'ts': timestamp}
-CACHE_TTL = 3 * 3600  # 3 hours in seconds
+CACHE_TTL = 12 * 3600  # 12 hours — background refresh handles freshness
+CACHE_DIR = os.path.join(os.path.dirname(__file__), 'data', 'cache')
+
+def _cache_file(project, endpoint):
+    return os.path.join(CACHE_DIR, f'{project}_{endpoint}.json')
 
 def cache_get(project, endpoint):
-    """Return cached data if fresh, else None."""
+    """Return cached data if fresh, else try file cache, else None."""
     key = (project, endpoint)
     entry = CACHE.get(key)
     if entry and (time.time() - entry['ts']) < CACHE_TTL:
         return entry['data'], entry['ts']
+    # Try file cache
+    fpath = _cache_file(project, endpoint)
+    if os.path.exists(fpath):
+        try:
+            with open(fpath) as f:
+                saved = json.load(f)
+            if time.time() - saved.get('ts', 0) < CACHE_TTL:
+                CACHE[key] = saved
+                return saved['data'], saved['ts']
+        except Exception:
+            pass
     return None, None
 
 def cache_set(project, endpoint, data):
-    """Store data in cache."""
-    CACHE[(project, endpoint)] = {'data': data, 'ts': time.time()}
+    """Store data in memory + file cache."""
+    entry = {'data': data, 'ts': time.time()}
+    CACHE[(project, endpoint)] = entry
+    try:
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        with open(_cache_file(project, endpoint), 'w') as f:
+            json.dump(entry, f, ensure_ascii=False)
+    except Exception:
+        pass  # File write may fail on read-only fs
 
 def is_refresh():
     """Check if client requested forced refresh."""
     return request.args.get('refresh') == '1'
+
+# ============================================================
+# BACKGROUND REFRESH (every hour)
+# ============================================================
+def _bg_refresh():
+    """Background thread: refresh all endpoints every hour."""
+    time.sleep(30)  # Wait for app to start
+    while True:
+        try:
+            print(f"[BG] Starting background refresh at {datetime.now().isoformat()}")
+            with app.test_request_context():
+                for project in ['main', 'lite']:
+                    try:
+                        leads = fetch_all_amo_leads(project)
+                        result = analyze_amo_data(leads, project)
+                        cache_set(project, 'amo', result)
+                        print(f"[BG] {project}/amo OK: {result['totals']['leads']} leads")
+                    except Exception as e:
+                        print(f"[BG] {project}/amo ERROR: {e}")
+
+                    try:
+                        data = fetch_google_sheet(project)
+                        cache_set(project, 'gsheet', data)
+                        print(f"[BG] {project}/gsheet OK")
+                    except Exception as e:
+                        print(f"[BG] {project}/gsheet ERROR: {e}")
+
+                    for ep in ['metrika_traffic', 'metrika_sources', 'metrika_summary', 'metrika_organic']:
+                        try:
+                            _, cfg, _, metrika, _ = get_proj_cfg(project)
+                            if not metrika.get('access_token'):
+                                continue
+                            date_from = '2026-01-01'
+                            date_to = datetime.now().strftime('%Y-%m-%d')
+                            params = {'date1': date_from, 'date2': date_to}
+                            if 'traffic' in ep:
+                                params['metrics'] = 'ym:s:visits,ym:s:users'
+                                params['group'] = 'month'
+                                data = metrika_api('stat/v1/data/bytime', params, project)
+                            elif 'sources' in ep:
+                                params['metrics'] = 'ym:s:visits'
+                                params['dimensions'] = 'ym:s:trafficSource'
+                                params['group'] = 'month'
+                                data = metrika_api('stat/v1/data/bytime', params, project)
+                            elif 'summary' in ep:
+                                params['metrics'] = 'ym:s:visits,ym:s:users,ym:s:bounceRate,ym:s:pageDepth,ym:s:avgVisitDurationSeconds'
+                                params['dimensions'] = 'ym:s:trafficSource'
+                                data = metrika_api('stat/v1/data', params, project)
+                            elif 'organic' in ep:
+                                params['metrics'] = 'ym:s:visits'
+                                params['group'] = 'month'
+                                params['filters'] = "ym:s:trafficSource=='organic'"
+                                data = metrika_api('stat/v1/data/bytime', params, project)
+                            cache_set(project, ep, data)
+                            print(f"[BG] {project}/{ep} OK")
+                        except Exception as e:
+                            print(f"[BG] {project}/{ep} ERROR: {e}")
+
+            print(f"[BG] Refresh complete at {datetime.now().isoformat()}")
+        except Exception as e:
+            print(f"[BG] Refresh failed: {e}")
+
+        time.sleep(3600)  # Every hour
+
+# Start background thread
+_bg_thread = threading.Thread(target=_bg_refresh, daemon=True)
+_bg_thread.start()
 
 # ============================================================
 # CONFIG
