@@ -1657,7 +1657,7 @@ function buildErzDetail(r){
   }
 
   // Editable fields
-  const statusOptions=['','Текущий клиент','Общались','Бывший клиент','Нет касаний','Первичное касание'];
+  const statusOptions=['','Текущий клиент','Текущий клиент ИдаЛайт','В работе','Касание ИдаПроджект','Касание ИдаЛайт','Касание: оба','Общались','Бывший клиент','Нет касаний'];
   const selOpts=statusOptions.map(v=>`<option value="${v}"${(r.sales_status||''===v&&v==='')||(r.sales_status===v&&v!=='')?'selected':''}>${v||'—'}</option>`).join('');
   const commentVal=(r.sales_comment||'').replace(/"/g,'&quot;');
   const lprVal=(r.sales_has_lpr||'').replace(/"/g,'&quot;');
@@ -1694,19 +1694,20 @@ function renderErzTable(filtered){
   filtered.forEach((r)=>{
     const hasAny=(r.main_deals>0)||(r.lite_deals>0);
     const hasDeals=(r.deals&&r.deals.length>0)||(r.lite&&r.lite.length>0);
-    const clickable=hasAny||hasDeals;
-    const dim=!hasAny?'opacity:.45':'';
+    const hasDeals=(r.deals&&r.deals.length>0)||(r.lite&&r.lite.length>0);
+    const dim=!hasAny?'opacity:.55':'';
     let borderStyle='';
     if(r.main_won>0) borderStyle='border-left:3px solid var(--green)';
     else if(r.main_active>0) borderStyle='border-left:3px solid var(--accent)';
+    else if(r.lite_won>0) borderStyle='border-left:3px solid var(--accent2)';
     const lastMain=erzFmtDate(r.main_last);
     const lastSales=erzFmtDate(r.sales_last_contact);
-    const budget=(r.sales_budget&&r.sales_budget>0)?fR(r.sales_budget)+' ₽':'—';
+    const budget=(r.sales_budget&&r.sales_budget>0)?fR(r.sales_budget)+' ₽':(r.main_budget>0?fR(r.main_budget)+' ₽':'—');
     const company=r.company||'—';
     const region=r.region||'—';
-    const arrow=clickable?`<span id="erz-arrow-${r.rank}" style="font-size:9px;color:var(--muted);margin-right:4px">▶</span>`:'';
-    const cursorStyle=clickable?'cursor:pointer':'';
-    const clickAttr=clickable?`onclick="toggleErzDetail(${r.rank})"` :'';
+    const arrow=`<span id="erz-arrow-${r.rank}" style="font-size:9px;color:var(--muted);margin-right:4px">▶</span>`;
+    const cursorStyle='cursor:pointer';
+    const clickAttr=`onclick="toggleErzDetail(${r.rank})"`;
 
     const liteLast=erzFmtDate(r.sales_last_contact||r.main_last);
     const hasRealDeals=r.deals&&r.deals.length>0;
