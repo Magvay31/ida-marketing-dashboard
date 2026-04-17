@@ -1068,6 +1068,15 @@ def api_erz_data():
     return jsonify({'ok': False, 'error': 'No data file'})
 
 
+@app.route('/api/sales/analysis')
+def api_sales_analysis():
+    data_file = os.path.join(os.path.dirname(__file__), 'data', 'sales_analysis.json')
+    if os.path.exists(data_file):
+        with open(data_file) as f:
+            return jsonify({'ok': True, 'data': json.load(f)})
+    return jsonify({'ok': False, 'error': 'No data file'})
+
+
 @app.route('/api/erz/update', methods=['POST'])
 def api_erz_update():
     """Save manual edit for a company (persists separately from base data)"""

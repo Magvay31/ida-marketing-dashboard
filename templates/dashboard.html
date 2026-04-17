@@ -152,6 +152,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
       <button class="period-btn active" onclick="setProject('main')">ИдаПроджект</button>
       <button class="period-btn" onclick="setProject('lite')">ИдаЛайт</button>
       <button class="period-btn" onclick="setView('erz')">ЕРЗ застройщики</button>
+      <button class="period-btn" onclick="setView('sales')">Аналитика продаж</button>
     </div>
   </div>
   <div class="header-right">
@@ -346,6 +347,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-seri
   </div>
 </div>
 
+<!-- SALES ANALYSIS SECTION -->
+<div id="salesSection" style="display:none;padding:20px 28px">
+  <!-- Row 1: Summary cards -->
+  <div id="salesKpiGrid" class="kpi-grid" style="margin-bottom:16px"></div>
+  <!-- Row 2: Reasons + Budget -->
+  <div class="charts-row c2" style="margin-bottom:12px">
+    <div class="chart-card" id="salesReasonsCard">
+      <h3>Реальные причины отказов</h3>
+      <div class="sub">По данным анализа сделок</div>
+      <div id="salesReasonsBody"></div>
+    </div>
+    <div class="chart-card" id="salesBudgetCard">
+      <h3>Бюджетный анализ</h3>
+      <div class="sub">Ожидания клиента vs наш КП</div>
+      <div id="salesBudgetBody"></div>
+    </div>
+  </div>
+  <!-- Row 3: Why others + Ghost -->
+  <div class="charts-row c2" style="margin-bottom:12px">
+    <div class="chart-card" id="salesWhyOthersCard">
+      <h3>Почему выбирают других</h3>
+      <div class="sub">Конкурентные причины</div>
+      <div id="salesWhyOthersBody"></div>
+    </div>
+    <div class="chart-card" id="salesGhostCard">
+      <h3>Гост-паттерн</h3>
+      <div class="sub">Клиенты, переставшие выходить на связь</div>
+      <div id="salesGhostBody"></div>
+    </div>
+  </div>
+  <!-- Row 4: Recommendations -->
+  <div class="chart-card" id="salesRecsCard">
+    <h3>Рекомендации</h3>
+    <div class="sub">Приоритизированные действия</div>
+    <div id="salesRecsBody"></div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 // STATE
@@ -361,8 +400,9 @@ let charts = {};
 let currentProject = 'main';
 const PROJECT_NAMES = {main:'ИдаПроджект',lite:'ИдаЛайт'};
 let forceRefresh = false;
-let currentView = 'dashboard'; // 'dashboard' or 'erz'
+let currentView = 'dashboard'; // 'dashboard', 'erz', or 'sales'
 let erzData = null; // cache ERZ data after first fetch
+let salesData = null; // cache sales analysis after first fetch
 function qp(){return '?project='+currentProject+(forceRefresh?'&refresh=1':'')}
 
 const MN = {'01':'Янв','02':'Фев','03':'Мар','04':'Апр','05':'Май','06':'Июн','07':'Июл','08':'Авг','09':'Сен','10':'Окт','11':'Ноя','12':'Дек'};
@@ -1757,20 +1797,148 @@ async function fetchAndRenderErz(){
   renderErzTable(erzFilterRows(erzData, erzCurrentFilter));
 }
 
+// ============================================================
+// SALES ANALYSIS
+// ============================================================
+async function fetchAndRenderSales(){
+  if(salesData){renderSalesAnalysis(salesData);return;}
+  document.getElementById('salesKpiGrid').innerHTML='<div style="color:var(--muted);font-size:13px">Загрузка...</div>';
+  try{
+    const r=await fetch('/api/sales/analysis');
+    const j=await r.json();
+    if(j.ok){salesData=j.data;renderSalesAnalysis(salesData);}
+    else{document.getElementById('salesKpiGrid').innerHTML='<div style="color:var(--red);font-size:13px">'+j.error+'</div>';}
+  }catch(e){
+    document.getElementById('salesKpiGrid').innerHTML='<div style="color:var(--red);font-size:13px">Ошибка загрузки</div>';
+  }
+}
+
+function renderSalesAnalysis(d){
+  // Row 1: KPI cards
+  const ba=d.budget_analysis||{};
+  const nl=d.non_target_leads||{};
+  const gp=d.ghost_pattern||{};
+  const cards=[
+    {label:'Проанализировано сделок',value:d.total_analyzed||'—',sub:''},
+    {label:'Бюджет клиента',value:ba.client_expects_range||'—',sub:'ожидания'},
+    {label:'Наш КП',value:ba.our_kp_range||'—',sub:'коммерческое предложение'},
+    {label:'Sweet spot',value:ba.sweet_spot||'—',sub:'пересечение'},
+    {label:'Нецелевые лиды',value:(nl.pct||0)+'%',sub:(nl.count||0)+' сделок'},
+    {label:'Гост-паттерн',value:(gp.pct||0)+'%',sub:(gp.count||0)+' клиентов'},
+  ];
+  document.getElementById('salesKpiGrid').innerHTML=cards.map(c=>`
+    <div class="kpi-card">
+      <div class="kpi-label">${c.label}</div>
+      <div class="kpi-value" style="font-size:18px;word-break:break-word">${c.value}</div>
+      ${c.sub?`<div class="kpi-sub">${c.sub}</div>`:''}
+    </div>`).join('');
+
+  // Row 2 left: Real refusal reasons
+  const reasons=d.real_reasons||[];
+  const maxCount=reasons.length?Math.max(...reasons.map(r=>r.count||0)):1;
+  const reasonColors=['var(--red)','var(--red)','var(--orange)','var(--orange)','var(--green)','var(--green)'];
+  document.getElementById('salesReasonsBody').innerHTML=reasons.map((r,i)=>{
+    const pct=Math.round(((r.count||0)/maxCount)*100);
+    const color=reasonColors[i]||'var(--accent)';
+    return `<div class="funnel-stage" style="margin-bottom:10px;flex-direction:column;align-items:flex-start">
+      <div style="display:flex;align-items:center;width:100%;margin-bottom:3px">
+        <div class="funnel-label" style="width:auto;text-align:left;padding-right:0;font-size:12px;color:var(--text);font-weight:600;flex:1">${r.reason||''}</div>
+        <div style="font-size:11px;color:var(--muted);flex-shrink:0;padding-left:8px">${r.count||0} (${r.pct||0}%)</div>
+      </div>
+      <div class="funnel-bar-wrap" style="width:100%">
+        <div class="funnel-bar" style="background:${color};opacity:0.85;width:${pct}%;height:8px;border-radius:4px;padding:0"></div>
+      </div>
+      ${r.details?`<div style="font-size:10px;color:var(--muted);margin-top:3px">${r.details}</div>`:''}
+      ${r.typical_budget?`<div style="font-size:10px;color:var(--muted)">Бюджет: ${r.typical_budget}</div>`:''}
+    </div>`;
+  }).join('');
+
+  // Row 2 right: Budget analysis
+  const gapDesc=ba.gap_description||'';
+  document.getElementById('salesBudgetBody').innerHTML=`
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Ожидания клиента</div>
+      <div style="background:var(--accent);border-radius:6px;padding:10px 14px;font-size:14px;font-weight:700">${ba.client_expects_range||'—'}</div>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Наш КП</div>
+      <div style="background:rgba(239,68,68,0.25);border:1px solid var(--red);border-radius:6px;padding:10px 14px;font-size:14px;font-weight:700">${ba.our_kp_range||'—'}</div>
+    </div>
+    ${gapDesc?`<div style="background:rgba(239,68,68,0.1);border-radius:6px;padding:8px 12px;font-size:11px;color:var(--red);margin-bottom:10px">${gapDesc}</div>`:''}
+    <div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Sweet spot</div>
+      <div style="background:rgba(34,197,94,0.15);border:1px solid var(--green);border-radius:6px;padding:10px 14px;font-size:14px;font-weight:700;color:var(--green)">${ba.sweet_spot||'—'}</div>
+    </div>`;
+
+  // Row 3 left: Why others
+  const others=d.why_choose_others||[];
+  document.getElementById('salesWhyOthersBody').innerHTML=others.map(o=>`
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(42,46,61,0.5)">
+      <div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:2px 8px;font-size:12px;font-weight:700;flex-shrink:0;min-width:36px;text-align:center">${o.count||0}</div>
+      <div>
+        <div style="font-size:12px;font-weight:600">${o.reason||''}</div>
+        ${o.details?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${o.details}</div>`:''}
+      </div>
+    </div>`).join('');
+
+  // Row 3 right: Ghost pattern
+  document.getElementById('salesGhostBody').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+      <div class="kpi-card" style="padding:12px">
+        <div class="kpi-label">Кол-во</div>
+        <div class="kpi-value" style="font-size:22px">${gp.count||0}</div>
+      </div>
+      <div class="kpi-card" style="padding:12px">
+        <div class="kpi-label">Доля</div>
+        <div class="kpi-value" style="font-size:22px">${gp.pct||0}%</div>
+      </div>
+    </div>
+    ${gp.at_which_stage?`<div style="font-size:11px;color:var(--muted);margin-bottom:4px">Этап: <span style="color:var(--orange)">${gp.at_which_stage}</span></div>`:''}
+    ${gp.typical_scenario?`<div style="font-size:12px;color:var(--text);background:rgba(42,46,61,0.5);border-radius:6px;padding:10px;line-height:1.5">${gp.typical_scenario}</div>`:''}`;
+
+  // Row 4: Recommendations
+  const recs=d.recommendations||[];
+  const prioColor={high:'var(--red)',medium:'var(--orange)',low:'var(--green)'};
+  const prioLabel={high:'Высокий',medium:'Средний',low:'Низкий'};
+  document.getElementById('salesRecsBody').innerHTML=`<div style="display:grid;gap:10px">
+    ${recs.map(rec=>{
+      const col=prioColor[rec.priority]||'var(--muted)';
+      const lbl=prioLabel[rec.priority]||rec.priority||'';
+      return `<div style="background:rgba(42,46,61,0.4);border:1px solid var(--border);border-radius:8px;padding:14px;display:flex;gap:12px;align-items:flex-start">
+        <div style="flex-shrink:0;padding:3px 10px;border-radius:5px;font-size:10px;font-weight:700;background:${col}22;border:1px solid ${col};color:${col}">${lbl}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px">${rec.action||''}</div>
+          ${rec.expected_impact?`<div style="font-size:11px;color:var(--muted)">${rec.expected_impact}</div>`:''}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
 function setView(v){
   currentView=v;
   const mainDiv=document.querySelector('div.main');
   const erzDiv=document.getElementById('erzSection');
+  const salesDiv=document.getElementById('salesSection');
   document.querySelectorAll('#projectTabs .period-btn').forEach(b=>{
-    b.classList.toggle('active', b.textContent==='ЕРЗ застройщики'&&v==='erz');
+    b.classList.toggle('active',
+      (b.textContent==='ЕРЗ застройщики'&&v==='erz')||
+      (b.textContent==='Аналитика продаж'&&v==='sales'));
   });
   if(v==='erz'){
     mainDiv.style.display='none';
     erzDiv.style.display='block';
+    salesDiv.style.display='none';
     fetchAndRenderErz();
+  } else if(v==='sales'){
+    mainDiv.style.display='none';
+    erzDiv.style.display='none';
+    salesDiv.style.display='block';
+    fetchAndRenderSales();
   } else {
     mainDiv.style.display='';
     erzDiv.style.display='none';
+    salesDiv.style.display='none';
   }
 }
 
@@ -1779,6 +1947,7 @@ async function setProject(p){
   currentView='dashboard';
   document.querySelector('div.main').style.display='';
   document.getElementById('erzSection').style.display='none';
+  document.getElementById('salesSection').style.display='none';
   document.querySelectorAll('#projectTabs .period-btn').forEach(b=>{
     b.classList.toggle('active',
       (p==='main'&&b.textContent==='ИдаПроджект')||(p==='lite'&&b.textContent==='ИдаЛайт'));
