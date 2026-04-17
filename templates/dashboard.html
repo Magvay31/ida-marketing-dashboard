@@ -1740,7 +1740,6 @@ function renderErzTable(filtered){
   filtered.forEach((r)=>{
     const hasAny=(r.main_deals>0)||(r.lite_deals>0);
     const hasDeals=(r.deals&&r.deals.length>0)||(r.lite&&r.lite.length>0);
-    const hasDeals=(r.deals&&r.deals.length>0)||(r.lite&&r.lite.length>0);
     const dim=!hasAny?'opacity:.55':'';
     let borderStyle='';
     if(r.main_won>0) borderStyle='border-left:3px solid var(--green)';
