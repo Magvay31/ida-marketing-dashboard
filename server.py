@@ -258,7 +258,7 @@ def amo_refresh_token(project='main'):
         'client_secret': amo['client_secret'],
         'grant_type': 'refresh_token',
         'refresh_token': amo['refresh_token'],
-        'redirect_uri': 'https://example.com',
+        'redirect_uri': 'https://ida-marketing-dashboard-production.up.railway.app',
     })
     if resp.status_code == 200:
         data = resp.json()
